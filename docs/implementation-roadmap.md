@@ -7,8 +7,8 @@ Based on [requirements](event-requirements.md) and [source gap analysis](current
 - **P0** — indispensable for the event, including validation and rehearsal.
 - **P1** — beneficial, not a launch blocker.
 - **P2** — optional, after event-critical flow is complete.
-- Use [backlog items B01–B09](backlog.md) for traceable work while GitHub Issues are disabled; each item refers to requirements and states concrete acceptance criteria. Migrate to GitHub issues when enabled. Prefer short PRs implementing one vertical feature. **No code changes in this planning phase.**
-- Track status in the backlog until GitHub Issues are enabled, then use issue open/closed state rather than a duplicate checklist. This roadmap records sequencing and boundaries.
+- Use [GitHub Issues #1–#9](https://github.com/bottybotson/GeoGuess/issues) as the authoritative task and completion tracker, with stable B01–B09 IDs indexed in [backlog](backlog.md). Each issue references requirements and includes acceptance criteria. Prefer short PRs implementing one vertical feature. **No code changes in this planning phase.**
+- Track status in GitHub issue open/closed state and its acceptance checklist rather than maintaining a duplicate status table. This roadmap records sequencing and boundaries.
 
 ## Delivery sequence
 
@@ -53,4 +53,4 @@ Based on [requirements](event-requirements.md) and [source gap analysis](current
 
 ## Launch gate
 
-All P0 backlog items complete based on tested acceptance criteria, not just code committed. Complete a host-run rehearsal: scan QR on phones, 50-player concurrency/reconnect test, selected starting panorama, adjustable timer, late/non-submitting players, reveal, projector leaderboard, final standings and cleanup. Review billing alerts/quotas and deploy URL before the event.
+All P0 GitHub issues complete based on tested acceptance criteria, not just code committed. Complete a host-run rehearsal: scan QR on phones, 50-player concurrency/reconnect test, selected starting panorama, adjustable timer, late/non-submitting players, reveal, projector leaderboard, final standings and cleanup. Review billing alerts/quotas and deploy URL before the event.
