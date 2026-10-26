@@ -1,6 +1,6 @@
 # Fork baseline and requirements gap analysis
 
-Reviewed: 2026-10-26. Repository: `bottybotson/GeoGuess`, upstream `GeoGuess/GeoGuess`. This is a **static source review**, not a successful deployment/load test. Requirements are in [event-requirements.md](event-requirements.md); work plan is in [implementation-roadmap.md](implementation-roadmap.md).
+Reviewed: 2026-10-26. Repository: `bottybotson/GeoGuess`, upstream `GeoGuess/GeoGuess`. This is a **static source review**, not a successful deployment/load test. A local development/build/homepage baseline is now recorded in [development baseline](development-baseline.md), with a detailed [multiplayer source audit](multiplayer-baseline.md). Requirements are in [event-requirements.md](event-requirements.md); work plan is in [implementation-roadmap.md](implementation-roadmap.md).
 
 ## Existing components worth reusing
 
@@ -17,7 +17,7 @@ Reviewed: 2026-10-26. Repository: `bottybotson/GeoGuess`, upstream `GeoGuess/Geo
 | --- | --- | --- |
 | R01 | Rooms and common game exist, but starting and advancing are coupled to players/first player; no dedicated independent host role. | **Partial** — explicit host-controlled lobby, round, reveal, next-round lifecycle. |
 | R02 | `/room/:roomName` and nicknames exist, but QR rendering not found; README documents up to five friends. | **Partial** — QR and straightforward join flow; support/test max 50. |
-| R03 | No venue/tutorial first-round semantics. Predefined locations exist only in current single-player path. | **Missing** — enforce fixed first location and intro-friendly host pacing. |
+| R03 | No tutorial first-round semantics. Predefined locations exist only in current single-player path. | **Missing** — support a curated first location and intro-friendly host pacing; the venue is optional. |
 | R04 | Single-player preset coordinates; fixed `setPov({heading:270,pitch:0})`; nearest panorama selection can shift chosen position. | **Partial** — ordered multiplayer round data plus explicit POV/panorama handling and coverage checks. |
 | R05 | Static `timeLimitation` read at round start; local `endTime`; no host mutation flow for live extend/pause. | **Missing** — shared authoritative round deadline/status, adjustable at runtime. |
 | R06 | Pin-and-submit, score, map, mobile UX exist; timeout currently can generate a random guess. | **Partial** — simplify and evaluate accessibility; distinguish no-answer from arbitrary guess. |
@@ -27,6 +27,7 @@ Reviewed: 2026-10-26. Repository: `bottybotson/GeoGuess`, upstream `GeoGuess/Geo
 | R10 | PWA and responsive interface exist, but no dedicated older-first-time-player interaction audit. | **Needs validation** — usability and readability. |
 | R11 | Custom GeoJSON editor plus a hard-to-share URL-driven single-player coordinate preset. | **Partial** — simple event configuration and venue/POV validation. |
 | R12 | No post-round personal media workflow identified. | **Deferred P2** — only after the core live experience works. |
+| R13 | No separate admin and read-only presentation pages; legacy multiplayer page lifecycle mutates shared state. | **P1 preferred** — independent page/route surfaces over the required host/presenter access boundary. |
 
 ## Technical findings to consider when designing solutions
 

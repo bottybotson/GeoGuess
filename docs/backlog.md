@@ -17,18 +17,18 @@ All nine issues were created on 2026-10-26 with their acceptance criteria; no im
 ### [B02](https://github.com/bottybotson/GeoGuess/issues/2) · Robust host-owned lobby and maximum 50 guests
 **Stage A · Requirements R01, R02, R08 · Status: See linked GitHub issue**
 
-- Separate the host/projector role from guessing guests.
+- Separate the host/projector role from guessing guests; define distinct admin-write and presenter-read boundaries. Prefer separate admin/presentation pages (R13, delivered across B02/B06).
 - Guarantee unique/stable player identity under 50 simultaneous joins and reconnects; politely reject player 51.
 - Rejoining must not reset totals, duplicate guesses or destroy the lobby.
 - Session does not disappear when a guest/browser closes; review access controls.
 - Explicitly define policy for arriving after game start (no asynchronous challenge required).
 - Demonstrate concurrency-safe admission/reconnect at scale, not just a numerical cap.
 
-### [B03](https://github.com/bottybotson/GeoGuess/issues/3) · Curated Street View rounds and venue-first introduction
+### [B03](https://github.com/bottybotson/GeoGuess/issues/3) · Curated Street View rounds and gentle introduction
 **Stage B · Requirements R03, R04 · Status: See linked GitHub issue**
 
 - Define ordered rounds with selected coordinates and heading/pitch, optional stable panorama ID.
-- First round is **the physical event venue**, with a slow host-led demonstration.
+- First round supports a slow host-led demonstration. The physical venue is an optional curated choice, not a development prerequisite.
 - All players start with consistent intended panorama and angle; no random event rounds.
 - Detect missing/shifted Street View and offer setup validation.
 - Do not reveal stored answers before the round is closed.
@@ -55,7 +55,7 @@ All nine issues were created on 2026-10-26 with their acceptance criteria; no im
 **Stage C · Requirements R01, R07 · Status: See linked GitHub issue**
 
 - Host closes guessing, reveals correct location and distance-based points.
-- Cumulative scores/ranks are consistent and readable on projector screen; final ranking remains visible.
+- Cumulative scores/ranks are consistent and readable in a read-only spectator presentation view; final ranking remains visible. Prefer a separate URL from admin controls (R13).
 - Guess details are not shown to other players during active guessing.
 - Allow host to pause between rounds and tell the significance of each location.
 - Avoid repeated scoring on refresh or repeated submissions.
@@ -64,7 +64,7 @@ All nine issues were created on 2026-10-26 with their acceptance criteria; no im
 **Stage C · Requirements R08, R09, R10 · Status: See linked GitHub issue**
 
 - Test with **50 joined clients** and interruptions/reconnections, including slower phones.
-- Exercise the first venue-based tutorial, mid-round time extension, non-submitters, result reveal and final leaderboard.
+- Exercise a gentle first-round tutorial (venue optional), mid-round time extension, non-submitters, result reveal and final leaderboard.
 - Validate projected legibility, keyboard/touch usability, deployment checklist and recovery.
 - Measure actual API usage/cost and confirm quota/budget safeguards.
 - Record failures and only mark completed after blocking defects are fixed.
@@ -75,7 +75,7 @@ All nine issues were created on 2026-10-26 with their acceptance criteria; no im
 **Stage D · Requirements R04, R11 · Status: See linked GitHub issue**
 
 - Save ordered rounds, titles, coordinates, heading/pitch, optional panorama IDs and post-reveal descriptions.
-- Preview and validate selected views/venue before the event.
+- Preview and validate selected views before the event, including the venue if chosen.
 - Configuration file acceptable; no elaborate admin UI required.
 - Avoid inadvertently publishing sensitive personal locations in this **public fork**.
 

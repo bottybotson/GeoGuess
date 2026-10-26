@@ -7,7 +7,7 @@ Based on [requirements](event-requirements.md) and [source gap analysis](current
 - **P0** — indispensable for the event, including validation and rehearsal.
 - **P1** — beneficial, not a launch blocker.
 - **P2** — optional, after event-critical flow is complete.
-- Use [GitHub Issues #1–#9](https://github.com/bottybotson/GeoGuess/issues) as the authoritative task and completion tracker, with stable B01–B09 IDs indexed in [backlog](backlog.md). Each issue references requirements and includes acceptance criteria. Prefer short PRs implementing one vertical feature. **No code changes in this planning phase.**
+- Use [GitHub Issues #1–#9](https://github.com/bottybotson/GeoGuess/issues) as the authoritative task and completion tracker, with stable B01–B09 IDs indexed in [backlog](backlog.md). Each issue references requirements and includes acceptance criteria. Prefer short PRs implementing one vertical feature. Implementation is now authorized; begin with B01's reproducible baseline before changing multiplayer behavior. See [development baseline](development-baseline.md).
 - Track status in GitHub issue open/closed state and its acceptance checklist rather than maintaining a duplicate status table. This roadmap records sequencing and boundaries.
 
 ## Delivery sequence
@@ -20,7 +20,7 @@ Based on [requirements](event-requirements.md) and [source gap analysis](current
 **Exit criteria:** one reproducible dev run and a validated approach for 50 players, host independence, reconnect and round status.
 
 ### Stage B — birthday event gameplay (P0)
-- Ordered event rounds with exact locations, starting heading/pitch and optionally panorama ID. Round 1 fixed to the physical event venue.
+- Ordered event rounds with exact locations, starting heading/pitch and optionally panorama ID. Venue-first is optional; keep gentle introductory pacing.
 - Host owns opening/starting/closing/revealing/advancing each round, including deliberately slow tutorial pacing.
 - Shared live timer with extend/modify during play and sensible handling of non-submissions.
 - Nickname-only QR/browser join, 50-player admission, mobile guess/submit.
@@ -29,13 +29,14 @@ Based on [requirements](event-requirements.md) and [source gap analysis](current
 
 ### Stage C — results and usability (P0)
 - Fair round scoring, result reveal, leaderboard and projector/presenter screen.
+- The presentation surface is read-only and safe for spectators. Prefer separate admin and presentation pages (R13); define their access boundary in B02 and deliver presentation in B06.
 - Older-guest usability pass: large controls, brief instructions, legible typography, reassuring submissions and an easily taught first round.
 - Real phones and realistic connectivity; target **50 joined guests** and a full-length practice game.
 
 **Exit criteria:** host can present a full event without requiring guests to understand GeoGuessr.
 
 ### Stage D — preparation convenience (P1)
-- Event definition file or lightweight round editor; preflight panorama preview, camera direction and venue sanity checks.
+- Event definition file or lightweight round editor; preflight panorama preview and camera direction checks, including the venue if selected.
 - Optional host diagnostics and export if needed to run the event.
 
 ### Stage E — extras (P2)
