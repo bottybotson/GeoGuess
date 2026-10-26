@@ -8,8 +8,13 @@ const {
     getSelectedPos,
     getValueInObjectWithPath,
 } = require('../../../src/utils');
+const axios = require('../../../src/plugins/axios').default;
 
 describe('utils/index.js', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     it('validURL', () => {
         expect(validURL('')).toBeFalsy();
         expect(validURL('ftp://helllo.com')).toBeFalsy();
@@ -136,6 +141,19 @@ describe('utils/index.js', () => {
     });
 
     it('getAreaCodeNameFromLatLng: should return country code', async () => {
+        jest.spyOn(axios, 'get')
+            .mockResolvedValueOnce({
+                status: 200,
+                data: {
+                    extratags: { 'ISO3166-1:alpha2': 'FR' },
+                    address: { country_code: 'fr' },
+                },
+            })
+            .mockResolvedValueOnce({
+                status: 200,
+                data: { error: 'Unable to geocode' },
+            });
+
         const gps = {
             lat: () => 47.040182144806664,
             lng: () => -0.703125,
@@ -152,7 +170,15 @@ describe('utils/index.js', () => {
         expect(res2).toBeNull();
     });
 
-     it('getAreaCodeNameFromLatLng: should return area code where need fallback', async () => {
+    it('getAreaCodeNameFromLatLng: should return area code where need fallback', async () => {
+        jest.spyOn(axios, 'get').mockResolvedValue({
+            status: 200,
+            data: {
+                address: {},
+                display_name: 'Mexico City, Mexico',
+            },
+        });
+
         const gps = {
             lat: () => 19.250617647058824,
             lng: () => -99.07219999999
@@ -173,6 +199,11 @@ describe('utils/index.js', () => {
     });
     
     it('getAreaCodeNameFromLatLng: should return null if not value', async () => {
+        jest.spyOn(axios, 'get').mockResolvedValue({
+            status: 200,
+            data: { error: 'Unable to geocode' },
+        });
+
         const gps = {
             lat: () => 19.250617647058824,
             lng: () => -909.07219999999
