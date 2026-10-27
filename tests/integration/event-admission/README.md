@@ -79,6 +79,7 @@ env XDG_CONFIG_HOME=/workspace/.geoguess-emulator-tools/config \
   XDG_CACHE_HOME=/workspace/.cache \
   FIREBASE_EMULATORS_PATH=/workspace/.cache/firebase/emulators \
   CI=1 NODE_PATH=/workspace/.geoguess-emulator-tools/node_modules \
+  timeout --kill-after=10s 240s \
   /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node \
   /workspace/.geoguess-emulator-tools/node_modules/firebase-tools/lib/bin/firebase.js \
   emulators:exec --only database --project demo-geoguess-admission \
@@ -90,7 +91,9 @@ env XDG_CONFIG_HOME=/workspace/.geoguess-emulator-tools/config \
 excluded from the app's Jest/unit workflow. Its exit status and TAP counts must
 be preserved when capturing results. Successful syntax parsing (`node --check`)
 is not successful emulator validation.
-The Node test runner uses a 180-second test timeout. Listener readiness and the
+The outer 240-second watchdog also bounds CLI download/startup/shutdown hangs;
+an exit status of 124 is a timeout failure. The Node test runner uses a
+180-second test timeout. Listener readiness and the
 independent race observer's final-state barrier each have explicit 10-second
 timeouts; a timeout is a failed check, never a passed or skipped result.
 
