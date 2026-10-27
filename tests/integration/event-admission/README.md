@@ -5,8 +5,8 @@ does not modify legacy rooms, manifests or live Firebase resources. The real
 Database Emulator 4.11.2 compiled the rules and executed **10 tests: 10 passed,
 0 failed, 0 skipped**, on 2026-10-27; the command exited 0 and shut down cleanly.
 The checks include exactly 50 admitted memberships/slots from 51 independent
-authenticated clients, with forced initial slot contention. Strong independent
-security review is still required before proceeding to an application adapter.
+authenticated clients, with forced initial slot contention. A stronger independent
+reviewer reproduced all 10 passing tests and found no blocking protocol issue.
 The final documented watchdog command completed in 6263 ms of test-runner time
 with 0 cancelled/todo tests. The 51 clients are separate authenticated Firebase
 SDK contexts in one Node process; browser and venue rehearsals remain separate.
@@ -155,3 +155,29 @@ invariant fails, preserve the smallest failing input and stop adapter work; a
 trusted-backend alternative requires a separate concrete proposal. This local
 proof does not establish auth-provider setup, venue network behavior, production
 quotas, organizer recovery, real-device reconnects or event readiness.
+
+## Actual Firebase 8 lobby-client integration
+
+`lobby-client.cjs` tests the real application module with the repository's
+Firebase **8.10.1** SDK. It uses Babel only to load ES import/export syntax;
+it does not reimplement the client. The isolated modern rules-testing package
+only loads rules and provisions/inspects fixtures. The same demo-project and
+loopback guards precede local test-child proxy handling. No real authentication
+provider or live database is contacted.
+
+Run the exact emulator command above, replacing the final `admission.cjs` path
+with `lobby-client.cjs`. Run the suites separately, not concurrently: they reset
+the same disposable database. The application module and source dependencies
+must be present in the checkout.
+
+This suite executed **3 tests, 3 passed, 0 failed/skipped**, in approximately
+32 seconds, with exit 0 and clean shutdown. It covers two actual SDK clients
+contending for admission, redacted public subscription and rejoin after start,
+plus both outcomes of a real 15-second offline-write timeout. A fresh client on
+the same database waits for acknowledgement rather than trusting Firebase's
+optimistic local membership cache. Reconnection either recovers the original
+accepted membership or observes rejection after host start; no speculative
+admission is reported as successful.
+
+These are Node SDK tests with emulator mock user tokens, not browser auth
+restoration, actual phone connectivity or production quota evidence.
