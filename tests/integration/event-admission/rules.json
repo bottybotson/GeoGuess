@@ -1,0 +1,39 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "events": {
+      "$event": {
+        "public": {
+          "title": { ".read": true },
+          "phase": {
+            ".read": true,
+            ".write": "auth != null && auth.uid == root.child('events').child($event).child('hostUid').val() && data.exists() && newData.exists()",
+            ".validate": "newData.isString() && (newData.val() == 'lobby' || newData.val() == 'guessing' || newData.val() == 'reveal' || newData.val() == 'complete')"
+          },
+          "participants": {
+            ".read": true,
+            "$uid": {
+              ".write": "auth != null && auth.uid == $uid && auth.uid.matches(/^[A-Za-z0-9_-]{1,128}$/) && auth.uid != root.child('events').child($event).child('hostUid').val() && root.child('events').child($event).child('hostUid').isString() && root.child('events').child($event).child('public').child('phase').val() == 'lobby' && !data.exists() && newData.exists()",
+              ".validate": "newData.hasChildren(['slot', 'nickname']) && newData.parent().parent().child('slots').child(newData.child('slot').val()).val() == $uid",
+              "slot": {
+                ".validate": "newData.isString() && newData.val().matches(/^s(0[1-9]|[1-4][0-9]|50)$/)"
+              },
+              "nickname": {
+                ".validate": "newData.isString() && newData.val().matches(/^[\\s\\S]{1,20}$/) && newData.val().matches(/^[^\\u0009-\\u000D\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]([\\s\\S]*[^\\u0009-\\u000D\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF])?$/)"
+              },
+              "$other": { ".validate": false }
+            }
+          },
+          "slots": {
+            ".read": true,
+            "$slot": {
+              ".write": "auth != null && auth.uid.matches(/^[A-Za-z0-9_-]{1,128}$/) && auth.uid != root.child('events').child($event).child('hostUid').val() && root.child('events').child($event).child('hostUid').isString() && root.child('events').child($event).child('public').child('phase').val() == 'lobby' && $slot.matches(/^s(0[1-9]|[1-4][0-9]|50)$/) && !data.exists() && newData.isString() && newData.val() == auth.uid",
+              ".validate": "newData.parent().parent().child('participants').child(auth.uid).child('slot').val() == $slot"
+            }
+          }
+        }
+      }
+    }
+  }
+}

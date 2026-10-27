@@ -1,0 +1,5 @@
+firebase-debug.log*
+database-debug.log*
+ui-debug.log*
+hub-*.log
+.firebase/
