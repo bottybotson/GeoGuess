@@ -20,7 +20,7 @@
 
 ## Development and validation
 
-- Use Node from `.nvmrc` and `npm ci`; preserve the dependency lockfile unless dependency work is explicitly in scope. Cloud onboarding installs Node/npm under `/workspace/.geoguess-tools/node_modules/.bin`; add it to PATH when present.
+- Use Node from `.nvmrc` and `npm ci`; preserve the dependency lockfile unless dependency work is explicitly in scope. In this cloud environment, activate shared tools with `. /workspace/.geoguess-tools/env.sh` when present. It supplies pinned Node/npm, Xvfb and writable caches without credentials; shell calls otherwise start fresh. Reuse the activation file instead of repeating exports. Isolated emulator tools use their documented Node 24 runner.
 - From the repository root: `npm run serve`, `NODE_ENV=production npm run lint -- --no-fix`, `npm run test:unit -- --runInBand`, and `npm run build`. See `docs/development-baseline.md` for setup and live smoke checks.
 - Run relevant tests and required checks for changed behavior. Keep unit tests offline with realistic service responses; verify live providers separately. Do not weaken assertions, hide failures, or equate a homepage test with working multiplayer.
 - Test 50-client admission, guest 51 rejection, refresh/reconnect, duplicate actions, missed guesses, and read-only presenter behavior before claiming event readiness. No random lucky points for non-submissions.
