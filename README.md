@@ -1,55 +1,48 @@
-![logo](../master/public/img/icons/android-icon-36x36.png) Geoguess
-===
+# GeoGuess birthday event fork
 
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/GeoGuess/GeoGuess)](https://github.com/GeoGuess/Geoguess/releases) 
-[![GitHub](https://img.shields.io/github/license/BilelJegham/Geoguess-2)](https://github.com/GeoGuess/Geoguess/blob/master/LICENSE) 
-[![Discord](https://img.shields.io/discord/758443244387303435?color=7289DA&label=discord&logo=discord&logoColor=FFFFFF)](https://discord.gg/9GXm6RT)<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-28-orange.svg)](#-contribution)
-<!-- ALL-CONTRIBUTORS-BADGE:END --> 
-[![CI](https://github.com/GeoGuess/GeoGuess/actions/workflows/ci.yml/badge.svg)](https://github.com/GeoGuess/GeoGuess/actions/workflows/ci.yml)
-[![DeepScan grade](https://deepscan.io/api/teams/6533/projects/15869/branches/324468/badge/grade.svg)](https://deepscan.io/dashboard#view=project&tid=6533&pid=15869&bid=324468)
-[![codecov](https://codecov.io/gh/GeoGuess/Geoguess/branch/master/graph/badge.svg?token=J94E3GE4SL)](https://codecov.io/gh/GeoGuess/Geoguess)
-[![Crowdin](https://badges.crowdin.net/geoguess/localized.svg)](https://translate.geoguess.games/project/geoguess)
-[![Mutation testing badge](https://img.shields.io/endpoint?style=flat&url=https%3A%2F%2Fbadge-api.stryker-mutator.io%2Fgithub.com%2FGeoGuess%2FGeoGuess%2Fmaster)](https://dashboard.stryker-mutator.io/reports/github.com/GeoGuess/GeoGuess/master)
+This fork is being developed for a one-off, host-led birthday game. The planning maximum is 50 guests; real-device capacity has not yet been rehearsed.
 
-> Demo : https://demo.geoguess.games
+## Current status
 
-Geoguess is a free and lazy geoguess game. Players compete how close the player can guess random locations in five rounds.
-You can play multiplayer with your friends up to five friends. The first player creates a room and decides the room size. Other players type the same room name as the first player created and the game will start.
-Cause of Google Map Api price, we aren't enabled to deploy server with unlimited access. But you can deploy your own game server and play this game unlimitedly and free.
+The project retains the original Vue 2, Firebase Realtime Database, and Google Street View application. Admission, identity, and read-only presentation foundations are implemented; event-lobby integration is under development. The full host-led game—shared rounds, host controls, reveal, scoring, and final leaderboard—is not playable yet. Event readiness requires the remaining implementation and a real-device rehearsal.
 
-This game was forked from [GeoGuess Master Web](https://github.com/spider-hand/Geoguess-Master-Web).
+No public deployment for this fork has been verified. The repository homepage still points to the upstream project, and GitHub Pages is not configured for this fork.
 
-## Table of contents
+## Develop locally
 
-<!-- TOC -->
-  - [🃏 Features](#-features)
-  - [🚀 Deploy](#-deploy)
-  - [📝 Changelog](#-changelog)
-  - [👏 Contribution](#-contribution)
-  - [📜 License](#-license)
-  - [📞 Contact](#-contact)
-<!-- /TOC -->
+Use Node 20 from `.nvmrc`, then install the locked dependencies:
 
-## 🃏 Features
+```bash
+npm ci
+cp .env.dist .env.local
+```
 
--   Multiplayer game
--   PWA and responsive design
--   Custom Map (geojson)
--   History
--   Score
+Copy `.env.dist` to an ignored `.env.local` and supply your own Google Maps and Firebase web-app settings. The variable names and optional settings are listed in `.env.dist`. Google Maps browser keys are included in built assets, so restrict them with provider controls. Never commit real configuration values or Firebase Admin credentials.
 
-## 🚀 Deploy
+After filling in `.env.local`, start the development server with `npm run serve` and open the address printed in the terminal.
 
-To deploy, you can follow the guide on https://geoguess.games/guide/
+Useful checks:
 
-## 📝 Changelog
+```bash
+NODE_ENV=production npm run lint -- --no-fix
+npm run test:unit -- --runInBand
+npm run build
+```
 
-You can read the [CHANGELOG](CHANGELOG.md).
+## Project notes and public links
 
-## 👏 Contribution
+- [Requirements and acceptance criteria](docs/event-requirements.md)
+- [Development setup and baseline evidence](docs/development-baseline.md)
+- [Current state and gaps](docs/current-state-gap-analysis.md)
+- [Implementation roadmap](docs/implementation-roadmap.md)
+- [Documentation index](docs/README.md)
+- [Issues](https://github.com/bottybotson/GeoGuess/issues) · [Pull requests](https://github.com/bottybotson/GeoGuess/pulls) · [Changelog](CHANGELOG.md) · [License](LICENSE)
 
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
+This project is forked from [GeoGuess](https://github.com/GeoGuess/GeoGuess), itself forked from [GeoGuess Master Web](https://github.com/spider-hand/Geoguess-Master-Web). The original project’s contributors are credited below.
+
+## Contribution
+
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for contribution information.
 
 Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
 
@@ -105,12 +98,10 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
 
 
-## 📜 License
+## License
 
-Licensed under [MIT License](https://github.com/GeoGuess/Geoguess/blob/master/LICENSE)
+Licensed under the [MIT License](LICENSE).
 
-## 📞 Contact
+## Contact
 
-Feel free to give us feedback.  
-[Issues](https://github.com/GeoGuess/Geoguess/issues) or
-[Discord](https://discord.gg/9GXm6RT)
+Use the [GitHub issues page](https://github.com/bottybotson/GeoGuess/issues) for feedback and project work.
