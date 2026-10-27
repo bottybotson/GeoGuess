@@ -30,7 +30,7 @@ Participant keys are stable identities, never counts or nicknames. For this init
 
 No argument may be mutated, including on failure or repeat calls. Only `joined` creates a changed state. Guard prototype/inherited-property cases; never use truthiness or `in` for membership. This function neither removes guests nor handles scores, presence, auth persistence or transactions.
 
-Acceptance tests must exercise 50 sequential distinct admissions, rejection of guest 51, idempotent rejoin at capacity/each phase, late-newcomer rejection, host exclusion, invalid state/UID/nickname, Unicode boundaries, inherited/prototype-like keys, and preservation of unrelated fields with frozen inputs. A pure sequential simulation does not prove concurrent RTDB admission. Integration must later apply this policy inside one transaction and be verified with independent emulator clients and server-enforced rules.
+Acceptance tests must exercise 50 sequential distinct admissions, rejection of guest 51, idempotent rejoin at capacity/each phase, late-newcomer rejection, host exclusion, invalid state/UID/nickname, Unicode boundaries, inherited/prototype-like keys, and preservation of unrelated fields with frozen inputs. A pure sequential simulation does not prove concurrent RTDB admission. The original single-root-transaction integration proposal is superseded by the independently verified fixed-slot protocol below; the pure policy remains a behavioral reference, not an authorization or concurrent admission mechanism.
 
 ## Worker B: passive lobby presentation component
 
@@ -60,3 +60,13 @@ Tests must verify the empty and populated lobby, reactive prop changes, stable l
 Both workers can start independently against this contract. The lead alone owns shared router/store/manifests/lockfiles and Git operations. Do not broaden file ownership without coordination. Use existing dependencies and test setup; each worker runs its focused suite and reports exact outcomes.
 
 The lead reviews both changes and requests stronger independent review of admission invariants before publishing focused PRs. Never merge `master`/`main` without explicit organizer approval. A later B02 slice must resolve host authentication/recovery, stable anonymous identity, database/rules design and emulator concurrency before wiring any live service. Those are engineering decisions to refine next, not prerequisites for these two isolated modules.
+
+## Verified admission handoff for the next worker
+
+[Issue #17](https://github.com/bottybotson/GeoGuess/issues/17) now has an actual local emulator proof: 10 tests passed, including 51 independent authenticated contexts contending for exactly 50 reciprocal seats. A stronger independent reviewer reproduced that result. See `tests/integration/event-admission/README.md` for versions, assertions and limitations. This is not a production deployment or a 50-phone rehearsal.
+
+The integration uses an atomic multipath update, **not** a transaction at the lobby/event root. It creates `events/{eventId}/public/participants/{uid} = { slot, nickname }` together with `events/{eventId}/public/slots/{s01..s50} = uid`. Leaf rules enforce authenticated ownership, an existing lobby, host exclusion, immutable reciprocal membership and the fixed slot range; no ancestor write grant is added. A conflict requires rereading membership, phase and slots before retry. Existing membership is a read-only rejoin, including after start or at capacity.
+
+The public subscription reads only the separate `title`, `phase` and `participants` leaves. Admission also reads `slots`; neither consumer reads the event/public root, private state or `hostUid`. The caller obtains its UID from the identity adapter, not form input. The host identity is provisioned by trusted setup; a frontend role flag or first arrival does not make a host. Live authentication/provider setup, host provisioning/recovery and production rules remain separate integration gates.
+
+[Issue #21](https://github.com/bottybotson/GeoGuess/issues/21) specifies the bounded Firebase 8-compatible client and its file ownership. It must preserve the tested protocol and receive its own review and actual SDK/emulator integration checks before live routing. Do not deploy the experimental fixture rules automatically.
