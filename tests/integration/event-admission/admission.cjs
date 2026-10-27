@@ -5,10 +5,16 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createRequire } = require('node:module');
 const { test, before, after, beforeEach } = require('node:test');
-const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { ref, get, set, update, onValue } = require('firebase/database');
-const { setLogLevel } = require('firebase/app');
+// NODE_PATH alone is insufficient: the checkout's Firebase 8 wins nearest-node_modules
+// resolution. Load every Firebase dependency from the isolated, pinned tool root.
+const toolRequire = createRequire('/workspace/.geoguess-emulator-tools/package.json');
+assert.equal(toolRequire('firebase/package.json').version, '11.10.0');
+assert.equal(toolRequire('@firebase/rules-unit-testing/package.json').version, '4.0.1');
+const { initializeTestEnvironment, assertFails, assertSucceeds } = toolRequire('@firebase/rules-unit-testing');
+const { ref, get, set, update, onValue } = toolRequire('firebase/database');
+const { setLogLevel } = toolRequire('firebase/app');
 
 const PROJECT = 'demo-geoguess-admission';
 const HOST = '127.0.0.1';
@@ -17,6 +23,11 @@ const PORT = 9009;
 assert.equal(process.env.FIREBASE_DATABASE_EMULATOR_HOST, `${HOST}:${PORT}`,
     `Run through the local database emulator with FIREBASE_DATABASE_EMULATOR_HOST=${HOST}:${PORT}`);
 assert.equal(process.env.GCLOUD_PROJECT, PROJECT, 'The test requires the explicit demo project');
+// Firebase's Node WebSocket transport forwards HTTP_PROXY even for loopback
+// (it does not consult NO_PROXY). Only this fail-closed, local test child clears
+// HTTP proxy settings; the CLI still uses its normal proxy for verified downloads.
+delete process.env.HTTP_PROXY;
+delete process.env.http_proxy;
 setLogLevel('silent');
 let env;
 let serial = 0;
@@ -327,7 +338,8 @@ test('presenter subscribes to explicit public fields, disposes without any datab
 test('nickname rules match 1–20 Unicode code points including emoji and trim boundaries', async () => {
     const accepted = [
         'A', 'a'.repeat(20), '😀'.repeat(20), 'a'.repeat(19) + '😀',
-        'e\u0301'.repeat(10), '👩‍👩‍👧‍👦', 'A B', 'A\nB', 'A\u0000B'
+        'e\u0301'.repeat(10), '👩‍👩‍👧‍👦', 'A B', 'A\nB', 'A\u0000B',
+        'A' + '\n'.repeat(18) + 'B', '\u{10ffff}'.repeat(20), '\u200bGuest\u200b'
     ];
     for (const nickname of accepted) {
         assert.ok([...nickname].length <= 20);
@@ -337,6 +349,16 @@ test('nickname rules match 1–20 Unicode code points including emoji and trim b
     }
     const rejected = ['', 'a'.repeat(21), '😀'.repeat(21), 'a'.repeat(20) + '😀',
         ' ', '\tGuest', 'Guest\n', '\u00a0Guest', 'Guest\u2003', '\ufeffGuest', 'Guest\u3000'];
+    // Every ECMAScript trim code point is rejected at either boundary; internal
+    // whitespace and zero-width space remain valid as the pure contract requires.
+    const whitespace = [9, 10, 11, 12, 13, 0x20, 0xa0, 0x1680,
+        0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007,
+        0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff];
+    for (const codePoint of whitespace) {
+        const character = String.fromCodePoint(codePoint);
+        assert.equal(character.trim(), '');
+        rejected.push(character + 'Guest', 'Guest' + character);
+    }
     for (const nickname of rejected) {
         const uid = `invalid_${serial++}`;
         await assertFails(claim(db(uid), uid, 's50', nickname));

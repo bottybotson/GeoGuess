@@ -5,7 +5,9 @@
     "events": {
       "$event": {
         "public": {
-          "title": { ".read": true },
+          "title": {
+            ".read": true
+          },
           "phase": {
             ".read": true,
             ".write": "auth != null && auth.uid == root.child('events').child($event).child('hostUid').val() && data.exists() && newData.exists()",
@@ -20,9 +22,11 @@
                 ".validate": "newData.isString() && newData.val().matches(/^s(0[1-9]|[1-4][0-9]|50)$/)"
               },
               "nickname": {
-                ".validate": "newData.isString() && newData.val().matches(/^[\\s\\S]{1,20}$/) && newData.val().matches(/^[^\\u0009-\\u000D\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]([\\s\\S]*[^\\u0009-\\u000D\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF])?$/)"
+                ".validate": "newData.isString() && newData.val().matches(/^([\ud800-\udbff][\udc00-\udfff]|.){1,20}$/) && !newData.val().beginsWith('\\u0009') && !newData.val().endsWith('\\u0009') && !newData.val().beginsWith('\\u000a') && !newData.val().endsWith('\\u000a') && !newData.val().beginsWith('\\u000b') && !newData.val().endsWith('\\u000b') && !newData.val().beginsWith('\\u000c') && !newData.val().endsWith('\\u000c') && !newData.val().beginsWith('\\u000d') && !newData.val().endsWith('\\u000d') && !newData.val().beginsWith('\\u0020') && !newData.val().endsWith('\\u0020') && !newData.val().beginsWith('\\u00a0') && !newData.val().endsWith('\\u00a0') && !newData.val().beginsWith('\\u1680') && !newData.val().endsWith('\\u1680') && !newData.val().beginsWith('\\u2000') && !newData.val().endsWith('\\u2000') && !newData.val().beginsWith('\\u2001') && !newData.val().endsWith('\\u2001') && !newData.val().beginsWith('\\u2002') && !newData.val().endsWith('\\u2002') && !newData.val().beginsWith('\\u2003') && !newData.val().endsWith('\\u2003') && !newData.val().beginsWith('\\u2004') && !newData.val().endsWith('\\u2004') && !newData.val().beginsWith('\\u2005') && !newData.val().endsWith('\\u2005') && !newData.val().beginsWith('\\u2006') && !newData.val().endsWith('\\u2006') && !newData.val().beginsWith('\\u2007') && !newData.val().endsWith('\\u2007') && !newData.val().beginsWith('\\u2008') && !newData.val().endsWith('\\u2008') && !newData.val().beginsWith('\\u2009') && !newData.val().endsWith('\\u2009') && !newData.val().beginsWith('\\u200a') && !newData.val().endsWith('\\u200a') && !newData.val().beginsWith('\\u2028') && !newData.val().endsWith('\\u2028') && !newData.val().beginsWith('\\u2029') && !newData.val().endsWith('\\u2029') && !newData.val().beginsWith('\\u202f') && !newData.val().endsWith('\\u202f') && !newData.val().beginsWith('\\u205f') && !newData.val().endsWith('\\u205f') && !newData.val().beginsWith('\\u3000') && !newData.val().endsWith('\\u3000') && !newData.val().beginsWith('\\ufeff') && !newData.val().endsWith('\\ufeff')"
               },
-              "$other": { ".validate": false }
+              "$other": {
+                ".validate": false
+              }
             }
           },
           "slots": {
