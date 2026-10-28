@@ -88,4 +88,93 @@ describe('EventGuessMap', () => {
         await Promise.resolve();
         expect(maps.Map).not.toHaveBeenCalled();
     });
+
+    it('shows loading, exposes a retry after failure, and restores the acknowledged pin on success', async () => {
+        const { maps, markers } = makeMaps();
+        const wrapper = mount(EventGuessMap, {
+            propsData: { mapsLoader: jest.fn().mockRejectedValue(new Error('private provider detail')), selected: { lat: 8, lng: 9 } },
+        });
+        expect(wrapper.find('[role="status"]').text()).toContain('Loading');
+        await Promise.resolve();
+        await Promise.resolve();
+        await wrapper.vm.$nextTick();
+        expect(wrapper.find('[role="alert"]').text()).toContain('could not be loaded');
+        expect(wrapper.find('[role="alert"]').text()).toContain('If this keeps happening, reload this page.');
+        expect(wrapper.find('[role="alert"]').text()).not.toContain('private provider detail');
+        expect(wrapper.find('button').text()).toBe('Try again');
+
+        await wrapper.setProps({ mapsLoader: () => Promise.resolve(maps) });
+        await Promise.resolve();
+        await wrapper.vm.$nextTick();
+        expect(maps.Map).toHaveBeenCalledTimes(1);
+        expect(markers[0].options.position).toEqual({ lat: 8, lng: 9 });
+        expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+        wrapper.destroy();
+    });
+
+    it('allows explicit retry, prevents duplicate maps, and gates clicks while disabled', async () => {
+        const { maps, markers } = makeMaps();
+        const loader = jest.fn()
+            .mockRejectedValueOnce(new Error('failed'))
+            .mockRejectedValueOnce(new Error('failed again'))
+            .mockResolvedValue(maps);
+        const wrapper = mount(EventGuessMap, { propsData: { mapsLoader: loader, disabled: true } });
+        await Promise.resolve();
+        await Promise.resolve();
+        await wrapper.vm.$nextTick();
+        await wrapper.find('button').trigger('click');
+        await Promise.resolve();
+        await wrapper.vm.$nextTick();
+        expect(wrapper.find('[role="alert"]').exists()).toBe(true);
+        await wrapper.find('button').trigger('click');
+        await Promise.resolve();
+        await wrapper.vm.$nextTick();
+        expect(loader).toHaveBeenCalledTimes(3);
+        expect(maps.Map).toHaveBeenCalledTimes(1);
+        maps.event.addListener.mock.calls[0][2](click(0, 0));
+        expect(wrapper.emitted('select')).toBeUndefined();
+        expect(markers).toHaveLength(0);
+        wrapper.destroy();
+    });
+
+    it('shows a finite timeout error and ignores a loader that resolves afterward', async () => {
+        jest.useFakeTimers();
+        let resolveLoader;
+        const mapsLoader = () => new Promise((resolve) => { resolveLoader = resolve; });
+        const wrapper = mount(EventGuessMap, { propsData: { mapsLoader } });
+        await Promise.resolve();
+        jest.advanceTimersByTime(15000);
+        await Promise.resolve();
+        await Promise.resolve();
+        await wrapper.vm.$nextTick();
+        expect(wrapper.find('[role="alert"]').exists()).toBe(true);
+        const { maps } = makeMaps();
+        resolveLoader(maps);
+        await Promise.resolve();
+        expect(maps.Map).not.toHaveBeenCalled();
+        wrapper.destroy();
+        jest.useRealTimers();
+    });
+
+    it('removes old listeners and ignores callbacks after the loader prop changes', async () => {
+        const first = makeMaps();
+        const second = makeMaps();
+        const wrapper = await mounted({ mapsLoader: () => Promise.resolve(first.maps) });
+        const staleCallback = first.maps.event.addListener.mock.calls[0][2];
+        await wrapper.setProps({ mapsLoader: () => Promise.resolve(second.maps) });
+        await Promise.resolve();
+        await wrapper.vm.$nextTick();
+        expect(first.listeners[0].remove).toHaveBeenCalled();
+        staleCallback(click(10, 20));
+        expect(wrapper.emitted('select')).toBeUndefined();
+        expect(second.maps.Map).toHaveBeenCalledTimes(1);
+        wrapper.destroy();
+    });
+
+    it('reports an unusable Maps API and keeps the retry control available', async () => {
+        const wrapper = await mounted({ mapsLoader: () => Promise.resolve({}) });
+        expect(wrapper.find('[role="alert"]').exists()).toBe(true);
+        expect(wrapper.find('button').exists()).toBe(true);
+        wrapper.destroy();
+    });
 });
