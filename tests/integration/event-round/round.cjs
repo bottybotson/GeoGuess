@@ -251,7 +251,7 @@ test('close versus guess race follows an independent authoritative observer orde
     });
 });
 
-for (const method of ['start', 'close', 'reveal', 'submitGuess']) {
+for (const method of ['start', 'close', 'reveal', 'submitGuess', 'setDeadline']) {
     for (const outcome of ['accepted', 'rejected']) {
         test(`real SDK8 ${method} queued write waits for server ${outcome} acknowledgement across adapters`, async () => {
             const queued = deferred();
@@ -265,13 +265,14 @@ for (const method of ['start', 'close', 'reveal', 'submitGuess']) {
             if (method !== 'start') await h.service.start('fixture');
             if (method === 'reveal') await h.service.close('fixture');
             const c = method === 'submitGuess' ? a : h;
-            const call = service => method === 'submitGuess' ? service.submitGuess('fixture', 'r1', { lat: 1, lng: 2 }) : service[method]('fixture');
+            const targetDeadline = Date.now() + 60000;
+            const call = service => method === 'submitGuess' ? service.submitGuess('fixture', 'r1', { lat: 1, lng: 2 }) : method === 'setDeadline' ? service.setDeadline('fixture', targetDeadline) : service[method]('fixture');
             arm = true;
             const first = call(c.service);
             const timeout = assert.rejects(first, error => error.code === 'unavailable');
             await queued.promise;
             await timeout; // Real 15-second clock and real Firebase optimistic cache.
-            const optimisticPath = `events/fixture/${method === 'submitGuess' ? `private/guesses/r1/${a.uid}` : 'public/phase'}`;
+            const optimisticPath = `events/fixture/${method === 'submitGuess' ? `private/guesses/r1/${a.uid}` : method === 'setDeadline' ? 'public/timing' : 'public/phase'}`;
             assert.notEqual((await c.database.ref(optimisticPath).once('value')).val(), null);
             assert.deepEqual((await c.database.ref(optimisticPath).get()).val(), (await c.database.ref(optimisticPath).once('value')).val());
             const next = createRoundClient(c.injected, c.identity);
@@ -279,7 +280,7 @@ for (const method of ['start', 'close', 'reveal', 'submitGuess']) {
             const retry = call(next).then(value => { settled = true; return { value }; }, error => { settled = true; return { error }; });
             let readSettled = false;
             const read = (method === 'submitGuess' ? next.getOwnGuess('fixture', 'r1') :
-                method === 'reveal' ? next.getReveal('fixture') : next.getRound('fixture'))
+                method === 'reveal' ? next.getReveal('fixture') : method === 'setDeadline' ? next.getTiming('fixture') : next.getRound('fixture'))
                 .then(value => { readSettled = true; return value; });
             await pause(100);
             assert.equal(readSettled, false, 'Public and own-guess reads also must reject optimistic pending state');
@@ -293,10 +294,11 @@ for (const method of ['start', 'close', 'reveal', 'submitGuess']) {
             await read;
             if (outcome === 'accepted') {
                 assert.equal(result.error, undefined);
-                assert.equal(result.value.status, { start: 'already-started', close: 'already-closed', reveal: 'already-revealed', submitGuess: 'already-submitted' }[method]);
+                assert.equal(result.value.status, { start: 'already-started', close: 'already-closed', reveal: 'already-revealed', submitGuess: 'already-submitted', setDeadline: 'already-set' }[method]);
             } else {
                 assert.ok(result.error);
                 if (method === 'submitGuess') assert.equal(await stored(`events/fixture/private/guesses/r1/${a.uid}`), null);
+                else if (method === 'setDeadline') assert.equal(await stored('events/fixture/public/timing'), null);
                 else assert.equal(await stored('events/fixture/public/phase'), { start: 'lobby', close: 'guessing', reveal: 'closed' }[method]);
             }
         });
@@ -414,4 +416,87 @@ test('unauthenticated public reader reveals results without requesting or creati
     assert.equal(identityRequests, 0);
     assert.equal(presenter.auth.currentUser, null);
     await denied(presenter.database.ref('events/fixture/public/phase').set('closed'));
+});
+
+
+test('host absolute deadlines are monotonic, concurrent retry-safe and publicly readable without identity', async () => {
+    const h = await host();
+    const a = await guest('Timed');
+    const presenter = rawClient();
+    assert.equal(await presenter.service.getTiming('fixture'), null);
+    const time = await presenter.service.getServerTime('fixture');
+    assert.ok(Number.isSafeInteger(time.nowMs));
+    assert.ok(Number.isFinite(time.offsetMs));
+    assert.equal(presenter.auth.currentUser, null);
+    await h.service.start('fixture');
+    const target = time.nowMs + 60000;
+    assert.deepEqual(await h.service.setDeadline('fixture', target), {
+        status: 'set', timing: { roundId: 'r1', deadlineMs: target },
+    });
+    await denied(a.service.setDeadline('fixture', target + 10000));
+    await denied(presenter.database.ref('events/fixture/public/timing').set({ roundId: 'r1', deadlineMs: target + 10000 }));
+    const second = await host();
+    const both = await Promise.all([
+        second.service.setDeadline('fixture', target + 10000),
+        h.service.setDeadline('fixture', target + 20000),
+    ]);
+    assert.ok(both.every(value => ['set', 'already-set'].includes(value.status)));
+    const expected = { roundId: 'r1', deadlineMs: target + 20000 };
+    assert.deepEqual(await presenter.service.getTiming('fixture'), expected);
+    assert.deepEqual(await createRoundClient(h.database, h.identity).setDeadline('fixture', target), { status: 'already-set', timing: expected });
+    assert.deepEqual(await second.service.setDeadline('fixture', target + 10000), { status: 'already-set', timing: expected });
+    assert.equal(presenter.auth.currentUser, null);
+});
+
+test('server clock expires guesses while preserving phase and lets host deliberately extend after expiry', async () => {
+    const h = await host();
+    const early = await guest('Early');
+    const late = await guest('Late');
+    await h.service.start('fixture');
+    const { nowMs } = await h.service.getServerTime('fixture');
+    const deadlineMs = nowMs + 1500;
+    await h.service.setDeadline('fixture', deadlineMs);
+    await early.service.submitGuess('fixture', 'r1', { lat: 1, lng: 2 });
+    await pause(Math.max(0, deadlineMs - Date.now()) + 75);
+    await denied(late.database.ref(`events/fixture/private/guesses/r1/${late.uid}`).set({ lat: 3, lng: 4 }));
+    assert.equal(await late.service.getOwnGuess('fixture', 'r1'), null);
+    assert.equal(await stored('events/fixture/public/phase'), 'guessing');
+    assert.equal(await stored('events/fixture/public/reveal'), null);
+    // No clock value or client-supplied timestamp can override the Rules now check.
+    await denied(late.database.ref(`events/fixture/private/guesses/r1/${late.uid}`).set({ lat: 3, lng: 4, submittedAt: deadlineMs - 1 }));
+    const next = (await h.service.getServerTime('fixture')).nowMs + 60000;
+    await h.service.setDeadline('fixture', next);
+    await late.service.submitGuess('fixture', 'r1', { lat: 3, lng: 4 });
+    await h.service.close('fixture');
+    await denied(h.database.ref('events/fixture/public/timing').set({ roundId: 'r1', deadlineMs: next + 1000 }));
+    await h.service.reveal('fixture');
+    assert.equal((await late.service.getReveal('fixture')).results[late.uid].answered, true);
+});
+
+test('timing rules reject malformed, deleted, shortened, wrong-provider and phase-racing writes', async () => {
+    const h = await host();
+    await guest('Timing guards');
+    const path = 'events/fixture/public/timing';
+    let target = Date.now() + 60000;
+    await denied(h.database.ref(path).set({ roundId: 'r1', deadlineMs: target }));
+    await h.service.start('fixture');
+    for (const timing of [
+        { roundId: 'r2', deadlineMs: target }, { roundId: 'r1', deadlineMs: target, extra: true },
+        { roundId: 'r1', deadlineMs: target + 0.5 }, { roundId: 'r1', deadlineMs: Date.now() },
+        { roundId: 'r1', deadlineMs: Date.now() + 7260000 }, { roundId: 'r1' }, { deadlineMs: target },
+    ]) await denied(h.database.ref(path).set(timing));
+    for (const [uid, provider] of [[hostUid, 'anonymous'], ['wrong-password-host', 'password']]) {
+        const db = env.authenticatedContext(uid, { firebase: { sign_in_provider: provider } }).database();
+        await denied(set(ref(db, path), { roundId: 'r1', deadlineMs: target }));
+    }
+    await h.service.setDeadline('fixture', target);
+    for (const leaf of [path, `${path}/roundId`, `${path}/deadlineMs`]) await denied(h.database.ref(leaf).set(null));
+    await denied(h.database.ref(path).set({ roundId: 'r1', deadlineMs: target - 1000 }));
+    await denied(h.database.ref().update({ [path]: { roundId: 'r1', deadlineMs: target + 10000 }, 'events/fixture/public/phase': 'closed' }));
+    assert.equal(await stored('events/fixture/public/phase'), 'guessing');
+    assert.deepEqual(await stored(path), { roundId: 'r1', deadlineMs: target });
+    await h.service.close('fixture');
+    await denied(h.database.ref(path).set({ roundId: 'r1', deadlineMs: target + 10000 }));
+    await h.service.reveal('fixture');
+    await denied(h.database.ref(path).set(null));
 });
