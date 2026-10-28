@@ -16,7 +16,7 @@ function databaseUrl(value) {
 function validate(input, target) {
     if (!exact(input, ['projectId', 'databaseUrl', 'eventId', 'event']) || !exact(target, ['projectId', 'databaseUrl', 'eventId'])) throw fail('invalid-input');
     if (typeof input.projectId !== 'string' || !/^[a-z][a-z0-9-]{4,62}$/.test(input.projectId) ||
-        typeof input.eventId !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(input.eventId)) throw fail('invalid-target');
+        typeof input.eventId !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(input.eventId) || placeholder(input.eventId)) throw fail('invalid-target');
     const url = databaseUrl(input.databaseUrl);
     if (target.projectId !== input.projectId || target.eventId !== input.eventId || databaseUrl(target.databaseUrl) !== url) throw fail('target-mismatch');
     const event = input.event;
