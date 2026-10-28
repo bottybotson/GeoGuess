@@ -7,28 +7,16 @@ The application source is `src/event/round.js`, loaded without reimplementing it
 commands. Babel transforms only ES import/export; the repository's Firebase
 8.10.1, Turf distance and existing getScore implementation execute unchanged.
 
-Verified on 2026-10-27 with the command below: **14 round tests passed** in
-125.8 seconds, followed by **all 10 original admission tests passed** against
-the candidate rules in 3.0 seconds. Both suites had 0 failures, cancellations,
-skips or todo tests. The combined command exited **0** and the Auth/Database
-emulators shut down cleanly. The 8 focused unit tests and production ESLint
-checks for the new application module/unit fixture also passed. These results
-do not substitute for the independent security review.
-
-The final targeted run also passed **3 tests** in 5.75 seconds, exit 0 with
-clean shutdown: strengthened valid-payload host authorization checks, the
-preserved 50-unanswered reveal, and a new 50-answered reveal. Every answered
-guest submitted the canonical answer through the actual adapter and received
-`answered:true, distance:0, points:5000`; repeated reveal preserved all results.
-The full runner now contains 16 round cases plus the 10 admission regressions;
-the added assertions were verified by this targeted run without repeating the
-unchanged eight 15-second offline checks.
-
-A subsequent public-reader target passed 1 test in 1.22 seconds, exit 0 with
-clean shutdown. An actual signed-out SDK8 presenter read the clue and published
-results without requesting identity or creating an anonymous user; private
-reads and writes remained denied. The new public-read branch also passed the
-8-test unit suite, including the shared acknowledgement barrier after timeout.
+Verified again on 2026-10-28 with the command below: **all 16 round tests
+passed** in 128.5 seconds, followed by **all 10 original admission tests passed**
+against the candidate rules in 2.5 seconds. Both suites had 0 failures,
+cancellations, skips or todo tests. The combined command exited **0** and the
+Auth/Database emulators shut down cleanly. This includes all eight 15-second
+uncertain-write cases, both 50-participant reveal cases and the signed-out
+public reader. The current application also passes 315 unit tests, 9 snapshots,
+production ESLint and the production build. Independent synchronization and
+security review found no blocking issue for this isolated prototype; live
+configuration and deployment remain separate acceptance gates.
 
 ## Contract and boundaries
 
