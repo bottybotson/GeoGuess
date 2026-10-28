@@ -42,8 +42,30 @@ identity/membership, and closing a guest page preserves both memberships. A
 narrow viewport has no horizontal overflow. These are browser contexts in a
 local emulator test, not real phones, a 50-device rehearsal or a public site.
 
-Actual deployment still requires reviewed event rules, a durable organizer
-identity, provider setup, Maps restrictions and the host-led round flow. The
-current routes are `/event/:eventId/join` and `/event/:eventId/present`; they
-only present the lobby. The host app will use a separate named instance so its
-email/password session cannot replace a guest in the same browser.
+## One-round browser check
+
+The candidate also supplies `/event/:eventId/host`, plus guessing and results on
+the guest and presentation routes. The host uses a separate named Firebase app,
+so signing in cannot replace a guest identity in the same browser.
+
+With the development server above compiled, run the same emulator command with
+`--config /workspace/GeoGuess/tests/integration/firebase.round-browser.json`
+and replace `browser.cjs` with `round-browser.cjs`. Do not run both suites at
+once. This fixture creates an ephemeral password organizer and trusted event
+inside the demo emulators; it does not create a usable live organizer or event.
+
+The scenario signs in the host, joins two guests, starts an untimed round,
+submits two pins, restores an accepted guess after reload, closes guesses and
+reveals distance/points on guest and presenter pages. It checks host/guest
+identity isolation, no presenter anonymous signup, exact panorama/POV arguments,
+and narrow-screen overflow. Google widgets are synthetic and all external
+traffic is blocked: this proves application wiring, not live imagery or API
+billing/restrictions. The fictional panorama is deliberately unsuitable for a
+real Street View demonstration.
+
+Actual deployment still requires reviewed live rules, a durable organizer and
+trusted event seed, provider setup, a valid curated panorama, Maps restrictions
+and a hosting decision. This prototype has one untimed round; adjustable timing,
+subsequent rounds and cumulative rankings remain separate requirements. See
+[the protocol proof](../event-round/README.md) for server boundaries and the
+independent 50-client admission/scoring checks.

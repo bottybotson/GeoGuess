@@ -4,9 +4,10 @@ import MedalsPage from '@/pages/MedalsPage';
 import Vue from 'vue';
 import Router from 'vue-router';
 import { GAME_MODE } from './constants';
-import { getEventLobbyClient } from './event/runtime';
+import { getEventLobbyClient, getEventRoundClient, getEventHostClient } from './event/runtime';
 
 const StreetView = () => import('@/pages/StreetView');
+const eventMapsLoader = () => Vue.$gmapApiPromiseLazy().then(api => api.maps);
 
 const originalPush = Router.prototype.push;
 Router.prototype.push = function push(location) {
@@ -22,7 +23,8 @@ const router = new Router({
             path: '/event/:eventId/join',
             name: 'event-join',
             component: () => import('@/pages/event/EventGuestLobby.vue'),
-            props: route => ({ eventId: route.params.eventId, lobbyClient: getEventLobbyClient() }),
+            props: route => ({ eventId: route.params.eventId, lobbyClient: getEventLobbyClient(),
+                roundClient: getEventRoundClient(), mapsLoader: eventMapsLoader }),
             beforeEnter: (to, from, next) => next(/^[A-Za-z0-9_-]{1,80}$/.test(to.params.eventId) ? undefined : '/'),
         },
         {
@@ -32,11 +34,19 @@ const router = new Router({
             props: route => ({
                 eventId: route.params.eventId,
                 lobbyClient: getEventLobbyClient(),
+                roundClient: getEventRoundClient(),
                 joinUrl: typeof window === 'undefined' ? '' : new URL(
                     router.resolve({ name: 'event-join', params: { eventId: route.params.eventId } }).href,
                     window.location.origin
                 ).href,
             }),
+            beforeEnter: (to, from, next) => next(/^[A-Za-z0-9_-]{1,80}$/.test(to.params.eventId) ? undefined : '/'),
+        },
+        {
+            path: '/event/:eventId/host',
+            name: 'event-host',
+            component: () => import('@/pages/event/EventHost.vue'),
+            props: route => ({ eventId: route.params.eventId, hostClient: getEventHostClient() }),
             beforeEnter: (to, from, next) => next(/^[A-Za-z0-9_-]{1,80}$/.test(to.params.eventId) ? undefined : '/'),
         },
         {

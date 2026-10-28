@@ -1,6 +1,6 @@
 import { MAX_GUESTS } from './admission';
 
-const PHASES = new Set(['lobby', 'guessing', 'reveal', 'complete']);
+const PHASES = new Set(['lobby', 'guessing', 'closed', 'reveal', 'complete']);
 const SLOTS = Array.from({ length: MAX_GUESTS }, (_, index) => `s${String(index + 1).padStart(2, '0')}`);
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
