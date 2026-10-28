@@ -4,7 +4,7 @@ Work item: [#1 — runnable fork, costs/security and multiplayer smoke test](htt
 
 ## Reproduce local development
 
-Use the existing checkout with Node from `.nvmrc` (20.14) and npm 10.7. The cloud environment has these installed at `/workspace/.geoguess-tools/node_modules/.bin`; add that directory to `PATH`. On other machines, activate the pinned Node with your normal version manager.
+Use the existing checkout with Node from `.nvmrc` (20.14) and npm 10.7. In this cloud environment, source `. /workspace/.geoguess-tools/env.sh` to activate the pinned tools and writable caches. On other machines, activate the pinned Node with your normal version manager.
 
 From the repository root:
 
@@ -20,7 +20,7 @@ npm run serve -- --host 0.0.0.0
 
 The first development compilation can take roughly two minutes. A full production build makes both legacy and modern bundles; wait for the command's final exit status, not the first bundle summary. Build output is ignored at `dist/`. Do not update dependencies just to silence bundle-size or Browserslist warnings.
 
-For Cypress in this cloud machine, also add `/workspace/.geoguess-tools/xvfb/usr/bin` to `PATH` and set `CYPRESS_CACHE_FOLDER=/workspace/.cache/Cypress`, `XDG_CONFIG_HOME=/workspace/.geoguess-tools/config`, and `XDG_CACHE_HOME=/workspace/.cache`. The XDG paths keep browser configuration/cache in writable directories. A retained, tested environment helper at `/workspace/.geoguess-tools/install-xvfb.sh` refreshes local Xvfb from signed Debian indexes with APT checksum verification; it does not install system-wide packages. These machine-specific details are also saved in the environment install/start configuration.
+For Cypress in this cloud machine, the same activation file supplies local Xvfb, `CYPRESS_CACHE_FOLDER` and writable XDG directories. A retained environment helper at `/workspace/.geoguess-tools/install-xvfb.sh` refreshes local Xvfb from signed Debian indexes with APT checksum verification; it does not install system-wide packages. These machine-specific details are also saved in the environment install/start configuration.
 
 Verify successful compilation and an internal HTTP request to port 8080, then interact with the page: the homepage must render, and the language menu must switch between English and French. HTTP 200 alone is not a functional check. In the cloud instance, `/workspace/.geoguess-tools/smoke.cjs` performs this small check using installed Chromium and Playwright. That helper is an environment artifact, not a repository test or gameplay verification.
 
