@@ -6,7 +6,11 @@
             <p class="event-guest-lobby__count">{{ guestCount }} guests in the lobby</p>
         </header>
 
-        <EventJoinForm :state="joinState" @join="join" />
+        <EventGuestRound
+            v-if="joinState === 'joined' && roundClient && ['guessing', 'closed', 'reveal'].includes(phase)"
+            :event-id="eventId" :phase="phase" :round-client="roundClient" :maps-loader="mapsLoader"
+        />
+        <EventJoinForm v-else :state="joinState" @join="join" />
 
         <p v-if="connectionError" class="event-guest-lobby__connection" role="status" aria-live="polite">
             We couldn’t connect to the lobby. Check your connection and retry.
@@ -25,10 +29,12 @@
 
 <script>
 import EventJoinForm from '@/components/event/EventJoinForm.vue';
+import EventGuestRound from './EventGuestRound.vue';
 
 const PHASES = {
     lobby: 'The lobby is open. The host will start the game.',
     guessing: 'The game is in progress.',
+    closed: 'Guessing is closed. The host will reveal the results.',
     reveal: 'The host is revealing the round.',
     complete: 'The event is complete.',
 };
@@ -36,10 +42,12 @@ const PHASES = {
 export default {
     name: 'EventGuestLobby',
     inheritAttrs: false,
-    components: { EventJoinForm },
+    components: { EventJoinForm, EventGuestRound },
     props: {
         eventId: { type: String, required: true },
         lobbyClient: { type: Object, required: true },
+        roundClient: { type: Object, default: null },
+        mapsLoader: { type: Function, default: null },
     },
     data() {
         return {

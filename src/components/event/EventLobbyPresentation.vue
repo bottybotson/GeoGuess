@@ -33,6 +33,7 @@
 const PHASE_MESSAGES = {
     lobby: 'The lobby is open. The host will start the game.',
     guessing: 'Guessing is in progress. Results will be shown after the host reveals them.',
+    closed: 'Guessing is closed. The host will reveal the results.',
     reveal: 'The host is revealing the round. Round results are not available yet.',
     complete: 'The event is complete. Final results are not available yet.',
 };

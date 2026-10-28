@@ -21,6 +21,11 @@
             </button>
         </section>
 
+        <section v-else-if="roundClient && projection.phase === 'reveal'" class="event-presentation-page__results">
+            <EventRoundResults v-if="publicReveal" :reveal="publicReveal" />
+            <p v-else role="status">{{ revealError ? 'Results could not be loaded.' : 'Loading results…' }}</p>
+            <button v-if="revealError" type="button" class="event-presentation-page__retry" @click="retry">Reconnect</button>
+        </section>
         <EventLobbyPresentation
             v-else
             :title="projection.title"
@@ -33,8 +38,9 @@
 
 <script>
 import EventLobbyPresentation from '@/components/event/EventLobbyPresentation.vue';
+import EventRoundResults from '@/components/event/EventRoundResults.vue';
 
-const PHASES = new Set(['lobby', 'guessing', 'reveal', 'complete']);
+const PHASES = new Set(['lobby', 'guessing', 'closed', 'reveal', 'complete']);
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 function safeProjection(value) {
@@ -53,11 +59,12 @@ function safeProjection(value) {
 export default {
     name: 'EventPresentation',
     inheritAttrs: false,
-    components: { EventLobbyPresentation },
+    components: { EventLobbyPresentation, EventRoundResults },
     props: {
         eventId: { type: String, required: true },
         lobbyClient: { type: Object, required: true },
         joinUrl: { type: String, default: '' },
+        roundClient: { type: Object, default: null },
     },
     data() {
         return {
@@ -67,11 +74,15 @@ export default {
             epoch: 0,
             disposer: null,
             connectScheduled: false,
+            publicReveal: null,
+            revealError: false,
+            revealLoading: false,
         };
     },
     watch: {
         eventId() { this.scheduleConnect(); },
         lobbyClient() { this.scheduleConnect(); },
+        roundClient() { this.scheduleConnect(); },
     },
     mounted() {
         this.connect();
@@ -103,6 +114,9 @@ export default {
             this.stopSubscription();
             this.status = 'loading';
             this.projection = null;
+            this.publicReveal = null;
+            this.revealError = false;
+            this.revealLoading = false;
 
             let cancelled = false;
             let returnedDisposer = null;
@@ -128,6 +142,7 @@ export default {
                 }
                 this.projection = safe;
                 this.status = 'ready';
+                if (safe.phase === 'reveal' && this.roundClient) this.loadReveal(epoch);
             };
             const onError = () => {
                 if (!current()) return;
@@ -155,6 +170,21 @@ export default {
         retry() {
             this.connect();
         },
+        async loadReveal(epoch) {
+            if (this.publicReveal || this.revealLoading) return;
+            const client = this.roundClient;
+            this.revealLoading = true;
+            try {
+                const value = await client.getReveal(this.eventId);
+                if (epoch !== this.epoch || client !== this.roundClient || this.status !== 'ready' || this.projection.phase !== 'reveal') return;
+                if (!value) throw new Error('Reveal unavailable');
+                this.publicReveal = value;
+            } catch {
+                if (epoch === this.epoch && client === this.roundClient && this.status === 'ready') this.revealError = true;
+            } finally {
+                if (epoch === this.epoch && client === this.roundClient) this.revealLoading = false;
+            }
+        },
     },
 };
 </script>
@@ -166,6 +196,8 @@ export default {
     color: #fff;
     font-family: Arial, sans-serif;
 }
+.event-presentation-page__results { min-height: 100vh; padding: clamp(1rem, 4vw, 3rem); background: #fff; color: #17212b; }
+.event-presentation-page__results .event-round-results { font-size: clamp(1.25rem, 2.4vw, 2rem); }
 
 .event-presentation-page__message {
     box-sizing: border-box;
