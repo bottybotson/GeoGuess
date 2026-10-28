@@ -99,6 +99,20 @@
             "$other": {
               ".validate": false
             }
+          },
+          "timing": {
+            ".read": true,
+            ".write": "auth != null && auth.uid == root.child('events').child($event).child('hostUid').val() && auth.token.firebase.sign_in_provider == 'password' && root.child('events').child($event).child('public').child('phase').val() == 'guessing' && newData.parent().child('phase').val() == 'guessing' && newData.exists() && (!data.exists() || newData.child('deadlineMs').val() > data.child('deadlineMs').val())",
+            ".validate": "newData.hasChildren(['roundId','deadlineMs'])",
+            "roundId": {
+              ".validate": "newData.val() == 'r1'"
+            },
+            "deadlineMs": {
+              ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() > now && newData.val() <= now + 7200000"
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         },
         "private": {
@@ -120,7 +134,7 @@
                   ".validate": false
                 },
                 ".read": "auth != null && auth.uid == $uid && root.child('events').child($event).child('public').child('participants').child($uid).exists()",
-                ".write": "auth != null && auth.uid == $uid && auth.uid != root.child('events').child($event).child('hostUid').val() && root.child('events').child($event).child('public').child('participants').child($uid).exists() && root.child('events').child($event).child('public').child('phase').val() == 'guessing' && !data.exists() && newData.exists()"
+                ".write": "auth != null && auth.uid == $uid && auth.uid != root.child('events').child($event).child('hostUid').val() && root.child('events').child($event).child('public').child('participants').child($uid).exists() && root.child('events').child($event).child('public').child('phase').val() == 'guessing' && !data.exists() && newData.exists() && (!root.child('events').child($event).child('public').child('timing').exists() || now < root.child('events').child($event).child('public').child('timing').child('deadlineMs').val())"
               }
             }
           }
