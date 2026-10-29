@@ -1,5 +1,6 @@
 import distance from '@turf/distance';
 import { getScore } from '../utils/game/score';
+import { MAX_WINDOW_MS, validDeadline, validTiming } from './timing';
 
 const failure = code => Object.assign(new Error(code), { code });
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -51,7 +52,7 @@ function track(database, eventId, promise) {
 const permissionDenied = error => /^(database\/)?permission-denied$/.test(
     typeof error.code === 'string' ? error.code.toLowerCase().replace(/_/g, '-') : '');
 
-/** One untimed round. Firebase 8 DB and restored identity are injected. */
+/** One optionally timed round. Firebase 8 DB and restored identity are injected. */
 export function createRoundClient(database, identity) {
     function run(eventId, roundId, operation, publicRead = false) {
         if (typeof eventId !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(eventId)) {
@@ -96,7 +97,15 @@ export function createRoundClient(database, identity) {
                 uid = user.uid;
             }
             active();
-            return operation({ read, write, checked, uid });
+            const serverTime = async () => {
+                const snapshot = await database.ref('.info/serverTimeOffset').once('value');
+                active();
+                const offsetMs = snapshot.val();
+                const nowMs = Date.now() + offsetMs;
+                if (!Number.isFinite(offsetMs) || !validDeadline(nowMs)) throw failure('unavailable');
+                return { nowMs, offsetMs };
+            };
+            return operation({ read, write, checked, uid, serverTime });
         });
         const timeout = new Promise((resolve, reject) => {
             timer = setTimeout(() => { expired = true; reject(failure('unavailable')); }, 15000);
@@ -187,6 +196,33 @@ export function createRoundClient(database, identity) {
             }
         });
     }
+    // Absolute requests are retry-safe: never recompute/add a duration here.
+    function setDeadline(eventId, deadlineMs) {
+        if (!validDeadline(deadlineMs)) return Promise.reject(failure('invalid-deadline'));
+        return run(eventId, 'r1', async context => {
+            await hostSetup(context);
+            const confirmed = async () => {
+                const timing = await context.checked('public/timing', validTiming);
+                return timing && timing.deadlineMs >= deadlineMs ? timing : null;
+            };
+            const existing = await confirmed();
+            if (existing) return { status: 'already-set', timing: existing };
+            if (await context.read('public/phase') !== 'guessing') throw failure('invalid-phase');
+            const { nowMs } = await context.serverTime();
+            if (deadlineMs <= nowMs || deadlineMs > nowMs + MAX_WINDOW_MS) throw failure('invalid-deadline');
+            const timing = { roundId: 'r1', deadlineMs };
+            try {
+                await context.write({ 'public/timing': timing });
+                return { status: 'set', timing };
+            } catch (error) {
+                if (permissionDenied(error)) {
+                    const accepted = await confirmed();
+                    if (accepted) return { status: 'already-set', timing: accepted };
+                }
+                throw error;
+            }
+        });
+    }
     function submitGuess(eventId, roundId, guess) {
         return run(eventId, roundId, async context => {
             if (!coordinate(guess)) throw failure('invalid-guess');
@@ -207,7 +243,9 @@ export function createRoundClient(database, identity) {
         });
     }
     return {
-        start, close, reveal, submitGuess,
+        start, close, reveal, submitGuess, setDeadline,
+        getTiming: eventId => run(eventId, 'r1', context => context.checked('public/timing', validTiming), true),
+        getServerTime: eventId => run(eventId, 'r1', context => context.serverTime(), true),
         getRound: eventId => run(eventId, 'r1', context => context.checked('public/round', clueValid), true),
         getReveal: eventId => run(eventId, 'r1', context => context.checked('public/reveal', revealValid), true),
         getOwnGuess: (eventId, roundId) => run(eventId, roundId, context => context.checked(`private/guesses/r1/${context.uid}`, coordinate)),

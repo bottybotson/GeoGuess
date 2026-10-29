@@ -1,4 +1,4 @@
-# Isolated one-round protocol proof — issue #27
+# Isolated one-round protocol proof — issues #27 and #40
 
 This candidate is local only. It does not deploy rules or change live resources,
 legacy rooms, dependencies, admission fixtures, or event configuration. It uses
@@ -7,16 +7,65 @@ The application source is `src/event/round.js`, loaded without reimplementing it
 commands. Babel transforms only ES import/export; the repository's Firebase
 8.10.1, Turf distance and existing getScore implementation execute unchanged.
 
-Verified again on 2026-10-28 with the command below: **all 16 round tests
-passed** in 128.5 seconds, followed by **all 10 original admission tests passed**
-against the candidate rules in 2.5 seconds. Both suites had 0 failures,
+Verified on 2026-10-28 with the command below: **all 21 round/deadline tests
+passed** in 161.7 seconds, followed by **all 10 original admission tests passed**
+against the candidate rules in 3.1 seconds. Both suites had 0 failures,
 cancellations, skips or todo tests. The combined command exited **0** and the
-Auth/Database emulators shut down cleanly. This includes all eight 15-second
-uncertain-write cases, both 50-participant reveal cases and the signed-out
-public reader. The current application also passes 315 unit tests, 9 snapshots,
-production ESLint and the production build. Independent synchronization and
-security review found no blocking issue for this isolated prototype; live
-configuration and deployment remain separate acceptance gates.
+Auth/Database emulators shut down cleanly. This includes all ten 15-second
+uncertain-write cases, both 50-participant reveal cases, the signed-out public
+reader, concurrent absolute deadlines, actual server expiry and deliberate
+host reopening, and timing authorization/deletion/schema/phase protections.
+The 15 focused round/timing unit tests and scoped production ESLint also pass.
+Earlier full-app unit/build evidence belongs to the merged untimed prototype;
+the timer change still requires independent review and integration checks.
+
+## Optional deadline API (issue #40)
+
+Existing rounds remain untimed until the host sets a deadline. The only new
+public record is `public/timing = {roundId:'r1', deadlineMs:<integer>}`. It is
+readable signed out, immutable after guessing closes, and can never be deleted
+or shortened by a client. Host start/close/reveal still control phase; expiration
+neither closes nor reveals automatically. Rules use their own `now`, requiring
+`now < deadlineMs` for a new guess whenever timing exists. At or after expiry,
+new guesses are denied even if a browser clock/countdown is wrong. Existing
+accepted guesses remain readable and immutable. A host can deliberately extend
+an expired deadline while the phase remains `guessing`.
+
+`createRoundClient(database, identity)` adds:
+
+- `getTiming(eventId)` → null or the validated public timing record; no identity.
+- `getServerTime(eventId)` → `{nowMs, offsetMs}` using this SDK connection's
+  `.info/serverTimeOffset`; no identity. Treat it as a client clock estimate,
+  never authorization. Offline/skewed values cannot override server Rules.
+- `setDeadline(eventId, absoluteDeadlineMs)` → `{status:'set', timing}` after the
+  raw write acknowledgement, or `{status:'already-set', timing}` when confirmed
+  current timing is already at least that target. Requires the actual protected
+  host setup read and the password-provider host rule. A new target must be in
+  the future and within two hours of server time; Rules independently check the
+  same upper bound against `now`. A stale smaller request is a no-op, and two
+  concurrent targets converge to the larger accepted deadline.
+
+`src/event/timing.js` exports `deadlineAfter(serverNowMs, durationMs,
+currentDeadlineMs = null)` and `remainingMs(timing, serverNowMs)`. The duration
+helper accepts integer milliseconds from 1 second to 2 hours, extends from
+`max(serverNowMs,currentDeadlineMs)`, and refuses a resulting window exceeding
+2 hours. `remainingMs` returns null for untimed, or a nonnegative number with
+zero at the exact deadline. Recompute the display clock from server offset,
+not by decrementing a local stored counter.
+
+**Compute a target once per deliberate host action and retain that same absolute
+value for every retry, including an uncertain 15-second timeout.** Never call
+`deadlineAfter` again as part of retrying an existing action: that would be a new
+extension. The command intentionally has no read-then-add duration API. Shared
+pending-write acknowledgement barriers also cover timing writes/reads across
+fresh adapters, so optimistic Firebase values cannot report success before the
+server accepts or rejects the original request. Public timing reads use the
+same 15-second budget without signing the presenter in.
+
+This slice does not add host countdown controls, guest/presenter countdowns,
+subscriptions or auto-close. Their separate integration must retain pending
+absolute targets, clean up listeners/tickers, and show expiry honestly while
+allowing the host's deliberate extension.
 
 ## Contract and boundaries
 
@@ -112,7 +161,7 @@ and test deadline. Timeout, cancellation and skipped checks are not passes.
   rejection, private read boundaries, protected host/provider binding, ordered and
   atomic commands, every immutable record/deletion/ancestor defense, duplicate
   commands and same-UID guesses, observer-ordered close/guess race, empty-lobby
-  guard, 50-client answered/unanswered reveals, and all four operations with real 15-second offline
+  guard, 50-client answered/unanswered reveals, and all five operations with real 15-second offline
   accepted/rejected acknowledgements across new adapters and their read methods.
   The unauthenticated public-reader case verifies no identity request/account
   creation, null before publication, canonical reveal afterwards and continued
@@ -134,5 +183,5 @@ run, diagnosed, and corrected. No forced process exit hides unfinished cleanup.
 
 This is an isolated Node SDK/emulator proof, not a browser/venue connectivity,
 Google imagery, live deployment, production quota, full game timer, subsequent
-round, cumulative ranking or event-readiness claim. The untimed single round is
-this milestone only. Independent security review remains a separate launch gate.
+round, cumulative ranking or event-readiness claim. The optionally timed single round is
+this milestone only; deadline UI integration remains separate. Independent security review remains a separate launch gate.
