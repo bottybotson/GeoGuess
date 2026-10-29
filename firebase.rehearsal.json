@@ -1,0 +1,8 @@
+{
+  "database": [
+    {
+      "instance": "customgeoguess-default-rtdb",
+      "rules": "deployment/event-rehearsal.rules.json"
+    }
+  ]
+}

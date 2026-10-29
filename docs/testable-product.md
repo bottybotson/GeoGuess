@@ -42,7 +42,18 @@ The Firebase/Google Cloud project and browser configuration have already been su
 5. A build using the eight app configuration variables already supplied. `VUE_APP_` values are public browser configuration, not secrets. Do not compile an Admin SDK credential into the app.
 6. A trusted, one-time seed of a new event record matching the organizer's existing UID and the schema below. The browser cannot create the event or write its private answer/setup.
 
-The supplied project and browser settings do not establish that live Authentication providers, organizer UID, current database rules, key restrictions, hosting, or event seed are ready. A recent cloud provider probe stopped with `ERR_CERT_AUTHORITY_INVALID` before key authentication, so it did not verify project access or provider configuration. The repository has no root `firebase.json` or deployable root rules file; candidate rules and emulator configurations live under `tests/integration/` only. The supplied project's current rules and restrictions remain unverified.
+The supplied settings do not establish that live providers, organizer UID,
+deployed rules, hosting or event data are ready. Root `firebase.json` now provides
+Hosting-only configuration; `firebase.rehearsal.json` separately describes an
+explicit event-only database candidate for review. Neither has been deployed by
+this work. The candidate would deny legacy room/undeclared access, so the current
+rules and intended effect must be inspected before applying it.
+
+The 2026-10-29 real-provider probe fetched Google JavaScript and panorama metadata
+through a TLS-verifying transport, but the visual view displayed Google's load
+warning and no panorama tile was verified. Real imagery remains a blocker.
+Direct Chromium certificate trust also remains unresolved; no TLS bypass was used.
+
 
 ## Minimum event record contract
 
@@ -122,24 +133,24 @@ For repeated single-round runs, provision a new event ID each time (for example,
 
 Only a trusted operator with appropriate database privileges can remove a disposable event. Any reset operation must require an explicit event ID and explicit confirmation, validate that it is a disposable test project, and be separately reviewed; there is no such reset tool today. Never clear the entire database or overwrite an existing event as a shortcut.
 
-## Guarded seed and preflight: recommended next slice
+## Provisioning and current blockers
 
-There is no seed/preflight implementation yet. The emulator fixtures create a synthetic password organizer and write event setup through `withSecurityRulesDisabled`; that is test-only privileged setup. The source has no Admin SDK tool, durable host account bootstrap, live target guard, overwrite protection, or panorama preflight. Do not copy test fixture behavior into a public/browser command.
+The operator tool in `scripts/event-setup/` now validates configuration without
+network access by default. Its reviewed server-only adapter supports an explicit
+apply to the supplied project/database with matching confirmations and a secure,
+project-bound service-account file. It checks the existing password organizer and
+atomically refuses an existing event. No real credentials or live writes were
+used to validate that adapter; guarded Admin emulator tests establish its local
+transaction behavior. The browser preparation page never receives that credential.
 
-Implement one small operator CLI, kept outside frontend assets, with explicit `--project`, `--database-url`, and `--event-id`; a validated JSON input file containing the title and one-round setup; and trusted credentials supplied through a secure local mechanism. The first command should default to validation/dry-run and perform no writes. A separate explicit `--apply` should:
+The available ambient credential is not a matching project service account and
+was not used. Live execution still requires suitable trusted access, current-rules
+inspection/backup, the intentional event-only access decision, an organizer/test
+configuration and a separately reviewed apply/deploy action. Real Google imagery
+and the eventual hosted-origin restrictions remain unverified. No public game URL
+or physical-device rehearsal is claimed.
 
-- reject missing/placeholder fields, malformed IDs, nonfinite/out-of-range coordinates, heading outside `[0,360)`, pitch outside `[-90,90]`, nonpositive difficulty, missing panorama ID, and missing/invalid existing organizer UID;
-- check that the Auth account exists, is enabled, and already uses the password provider expected by the Rules; require the supplied `hostUid` to equal that account's actual UID;
-- verify the target project/database URL against explicit operator input and refuse production by default (with an allowlist/strong explicit override only after review);
-- read the event path first and refuse any existing value—never update or replace it;
-- verify the panorama through the Maps JavaScript `StreetViewService` using the browser key, or through a separately restricted server key if a server Web Service is necessary; confirm the returned panorama and inspect scene/answer coherence;
-- create the event only if the path is still absent using a Realtime Database transaction that returns the event value only for `current === null` (abort otherwise). A prior read followed by a write is insufficient because another process can create the event between those operations;
-- print a redacted summary and next URLs, not credentials, answer coordinates, or tokens.
-
-Keep this first slice to a fresh disposable rehearsal event and one untimed round. Do not add arbitrary reset/delete, multi-round support, timer changes, credentials in `.env` committed files, dependency upgrades, or live deployment. A bounded acceptance task is: test dry-run/schema failures and existing-event refusal offline; verify provider UID binding and event creation against a disposable emulator with an existing emulator user; then prepare (but do not apply) the exact merged-rule/deployment artifacts for human review. Real provider panorama preflight remains a separate explicitly configured check.
-
-## Evidence and open blockers
-
-Source review covered issue #34, the event requirements/gap/roadmap and development baseline, `src/event/{runtime,lobby,admission,identity,host,round}.js`, the routed Vue pages, and the integration fixtures/rules. Existing docs report passing local emulator protocol and routed browser checks using synthetic imagery; this investigation did not rerun those commands. There is no evidence here of a live event, real imagery load, deployed rules, public host route, or device rehearsal.
-
-The next bounded task is to implement and test the guarded seed/preflight CLI against the supplied project's corresponding emulator fixture, including actual existing-organizer UID binding, dry-run, and transactional create-if-absent. Remaining live blockers are to verify the supplied project's provider setup, host UID, current rules and key restrictions; curate a real panorama and answer; prepare merged rules preserving legacy room access; confirm hosting; and review the exact write/deploy plan. The current certificate error means live provider access has not yet been established. The code and local fixture evidence alone are not event readiness.
+Version-2 ordered rounds are an isolated protocol proof in a separate PR; the
+current preparation page, runtime and deployment candidate remain single-round.
+Combined rules, version dispatch, configuration and UI need their own integration
+proof before a multi-round event can be claimed.
