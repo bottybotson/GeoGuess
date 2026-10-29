@@ -26,18 +26,25 @@
             <p v-else role="status">{{ revealError ? 'Results could not be loaded.' : 'Loading results…' }}</p>
             <button v-if="revealError" type="button" class="event-presentation-page__retry" @click="retry">Reconnect</button>
         </section>
-        <EventLobbyPresentation
-            v-else
-            :title="projection.title"
-            :phase="projection.phase"
-            :participants="projection.participants"
-            :join-url="joinUrl"
-        />
+        <template v-else>
+            <EventLobbyPresentation
+                :title="projection.title"
+                :phase="projection.phase"
+                :participants="projection.participants"
+                :join-url="safeJoinUrl"
+            />
+            <EventJoinQr
+                v-if="projection.phase === 'lobby' && safeJoinUrl"
+                :event-id="eventId"
+                :join-url="safeJoinUrl"
+            />
+        </template>
     </div>
 </template>
 
 <script>
 import EventLobbyPresentation from '@/components/event/EventLobbyPresentation.vue';
+import EventJoinQr, { sanitizeJoinUrl } from '@/components/event/EventJoinQr.vue';
 import EventRoundResults from '@/components/event/EventRoundResults.vue';
 
 const PHASES = new Set(['lobby', 'guessing', 'closed', 'reveal', 'complete']);
@@ -59,12 +66,17 @@ function safeProjection(value) {
 export default {
     name: 'EventPresentation',
     inheritAttrs: false,
-    components: { EventLobbyPresentation, EventRoundResults },
+    components: { EventLobbyPresentation, EventJoinQr, EventRoundResults },
     props: {
         eventId: { type: String, required: true },
         lobbyClient: { type: Object, required: true },
         joinUrl: { type: String, default: '' },
         roundClient: { type: Object, default: null },
+    },
+    computed: {
+        safeJoinUrl() {
+            return sanitizeJoinUrl(this.joinUrl, this.eventId);
+        },
     },
     data() {
         return {

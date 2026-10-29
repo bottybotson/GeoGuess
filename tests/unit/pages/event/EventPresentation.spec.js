@@ -24,7 +24,8 @@ describe('EventPresentation', () => {
     it('shows loading until the public projection arrives, then renders the view and public join URL', async () => {
         const client = clientWithListener();
         const wrapper = mount(EventPresentation, {
-            propsData: { eventId: 'party', lobbyClient: client, joinUrl: 'https://example.test/join' },
+            propsData: { eventId: 'party', lobbyClient: client,
+                joinUrl: 'https://example.test/event/party/join?admin=secret#private' },
         });
 
         expect(wrapper.find('[role="status"]').text()).toContain('Loading the public event view');
@@ -34,7 +35,9 @@ describe('EventPresentation', () => {
         expect(wrapper.find('h1').text()).toBe('Birthday game');
         expect(wrapper.text()).toContain('1 of 50 guests');
         expect(wrapper.text()).toContain('Alex');
-        expect(wrapper.text()).toContain('https://example.test/join');
+        expect(wrapper.text()).toContain('https://example.test/event/party/join');
+        expect(wrapper.text()).not.toMatch(/secret|private/);
+        expect(wrapper.find('.event-join-qr img').attributes('src')).toMatch(/^data:image\/gif;base64,/);
         wrapper.destroy();
         expect(client.listeners[0].dispose).toHaveBeenCalledTimes(1);
     });
@@ -62,12 +65,25 @@ describe('EventPresentation', () => {
         const client = clientWithListener();
         const wrapper = mount(EventPresentation, { propsData: { eventId: 'party', lobbyClient: client } });
         client.listeners[0].onChange(projection());
-        await wrapper.setProps({ joinUrl: 'https://example.test/new' });
+        await wrapper.setProps({ joinUrl: 'https://example.test/event/party/join?admin=secret#private' });
         wrapper.destroy();
 
         expect(client.subscribe).toHaveBeenCalledTimes(1);
         expect(Object.keys(client)).toEqual(['listeners', 'subscribe']);
         expect(client.listeners[0].dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('omits QR and link data for a URL that is not the current public join route', async () => {
+        const client = clientWithListener();
+        const wrapper = mount(EventPresentation, { propsData: {
+            eventId: 'party', lobbyClient: client, joinUrl: 'https://example.test/event/other/host?token=secret',
+        } });
+        client.listeners[0].onChange(projection());
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.text()).not.toContain('secret');
+        expect(wrapper.find('.event-join-qr').exists()).toBe(false);
+        wrapper.destroy();
     });
 
     it('projects only title, phase, participant ID and nickname from callback data', async () => {
