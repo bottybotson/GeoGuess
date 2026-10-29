@@ -185,3 +185,17 @@ This is an isolated Node SDK/emulator proof, not a browser/venue connectivity,
 Google imagery, live deployment, production quota, full game timer, subsequent
 round, cumulative ranking or event-readiness claim. The optionally timed single round is
 this milestone only; deadline UI integration remains separate. Independent security review remains a separate launch gate.
+
+## Realtime timing observer integration
+
+`timing-observer.cjs` checks the actual application observer with Firebase 8 and
+the guarded local Auth/Database emulators. Use the emulator command above and
+replace its Node runner with `node --test` for this file, using the same external
+Node 24 path. Run separately because fixtures share/reset the demo database.
+
+Verified 2026-10-29: one scenario passed in 31.6 seconds, exit 0 and clean
+shutdown. It exercises accepted and rejected offline writes through their real
+15-second deadlines, suppresses optimistic timing before acknowledgement,
+recovers after reconnect and observes from a signed-out presenter without
+requesting identity. Focused tests additionally cover stop/late callback and
+synchronous cancellation after listener registration.
