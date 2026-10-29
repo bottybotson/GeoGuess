@@ -10,11 +10,19 @@ const projection = (extra = {}) => ({
 
 function clientWithListener() {
     const listeners = [];
+    const timingListeners = [];
     return {
         listeners,
+        timingListeners,
         subscribe: jest.fn((eventId, onChange, onError) => {
             const listener = { eventId, onChange, onError, dispose: jest.fn() };
             listeners.push(listener);
+            return listener.dispose;
+        }),
+        subscribeTiming: jest.fn((eventId, onChange, onError) => {
+            const listener = { eventId, onChange, onError, dispose: jest.fn() };
+            timingListeners.push(listener);
+            onChange({ timing: null, offsetMs: 0, connected: true });
             return listener.dispose;
         }),
     };
@@ -69,8 +77,23 @@ describe('EventPresentation', () => {
         wrapper.destroy();
 
         expect(client.subscribe).toHaveBeenCalledTimes(1);
-        expect(Object.keys(client)).toEqual(['listeners', 'subscribe']);
+        expect(Object.keys(client)).toEqual(['listeners', 'timingListeners', 'subscribe', 'subscribeTiming']);
         expect(client.listeners[0].dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the read-only countdown during guessing and cleans up timing observation', async () => {
+        const lobby = clientWithListener();
+        const round = clientWithListener();
+        const wrapper = mount(EventPresentation, { propsData: {
+            eventId: 'party', lobbyClient: lobby, roundClient: round,
+        } });
+        lobby.listeners[0].onChange(projection({ phase: 'guessing' }));
+        await wrapper.vm.$nextTick();
+        expect(round.subscribeTiming).toHaveBeenCalledWith('party', expect.any(Function), expect.any(Function));
+        expect(wrapper.find('.event-round-timer').text()).toContain('No time limit');
+        expect(wrapper.find('.event-presentation-page__timer').exists()).toBe(true);
+        wrapper.destroy();
+        expect(round.timingListeners[0].dispose).toHaveBeenCalledTimes(1);
     });
 
     it('omits QR and link data for a URL that is not the current public join route', async () => {

@@ -242,8 +242,113 @@ export function createRoundClient(database, identity) {
             }
         });
     }
+    /** Public server-clock view. Optimistic local timing writes are never confirmations. */
+    function subscribeTiming(eventId, onChange, onError = () => {}) {
+        if (typeof eventId !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(eventId) ||
+            typeof onChange !== 'function' || typeof onError !== 'function') throw failure('invalid-event-id');
+        let live = true;
+        let generation = 0;
+        let budget;
+        let connected = false;
+        let offsetMs = null;
+        let timingKnown = false;
+        let confirmed = null;
+        const listeners = [];
+        const safe = (callback, value) => { try { callback(value); } catch { /* Consumer exceptions are not provider failures. */ } };
+        const disconnected = () => safe(onChange, { timing: confirmed, offsetMs, connected: false });
+        const stop = () => {
+            if (!live) return;
+            live = false;
+            generation += 1;
+            clearTimeout(budget);
+            listeners.splice(0).forEach(({ reference, callback }) => {
+                try { reference.off('value', callback); } catch { /* Preserve disposal of the remaining listeners. */ }
+            });
+        };
+        const unavailable = () => {
+            if (!live) return;
+            disconnected();
+            safe(onError, failure('unavailable'));
+        };
+        const reconcile = () => {
+            const ticket = ++generation;
+            clearTimeout(budget);
+            if (!live) return;
+            if (!connected || offsetMs === null || !timingKnown) {
+                disconnected();
+                return;
+            }
+            let expired = false;
+            const active = () => live && ticket === generation && !expired;
+            const writes = pending(database, eventId);
+            if (writes && writes.size) disconnected();
+            budget = setTimeout(() => {
+                if (!active()) return;
+                expired = true;
+                unavailable();
+            }, 15000);
+            Promise.resolve().then(async () => {
+                while (active()) {
+                    const queued = pending(database, eventId);
+                    if (queued && queued.size) {
+                        disconnected();
+                        await Promise.allSettled(Array.from(queued));
+                        // A late acknowledgement can restore the observer after its budget elapsed.
+                        if (expired && live && ticket === generation) reconcile();
+                        continue;
+                    }
+                    const snapshot = await database.ref(`events/${eventId}/public/timing`).once('value');
+                    if (!active()) return;
+                    const nextWrites = pending(database, eventId);
+                    if (nextWrites && nextWrites.size) continue;
+                    const timing = snapshot.val();
+                    if (timing !== null && !validTiming(timing)) throw failure('unavailable');
+                    confirmed = timing;
+                    clearTimeout(budget);
+                    safe(onChange, { timing: confirmed, offsetMs, connected: true });
+                    return;
+                }
+            }).catch(() => {
+                if (!active()) return;
+                clearTimeout(budget);
+                unavailable();
+            });
+        };
+        const listen = (path, receive) => {
+            if (!live) return;
+            const reference = database.ref(path);
+            const callback = snapshot => {
+                if (!live) return;
+                receive(snapshot.val());
+                reconcile();
+            };
+            listeners.push({ reference, callback });
+            try {
+                reference.on('value', callback, () => {
+                    if (!live) return;
+                    unavailable();
+                    stop();
+                });
+            } finally {
+                // Some providers finish registration after a synchronous cancellation.
+                if (!live) {
+                    try { reference.off('value', callback); } catch { /* Already disposed. */ }
+                }
+            }
+        };
+        disconnected();
+        try {
+            listen('.info/connected', value => { connected = value === true; });
+            listen('.info/serverTimeOffset', value => { offsetMs = Number.isFinite(value) ? value : null; });
+            listen(`events/${eventId}/public/timing`, () => { timingKnown = true; });
+        } catch {
+            unavailable();
+            stop();
+        }
+        return stop;
+    }
     return {
-        start, close, reveal, submitGuess, setDeadline,
+        start, close, reveal, submitGuess, setDeadline, subscribeTiming,
         getTiming: eventId => run(eventId, 'r1', context => context.checked('public/timing', validTiming), true),
         getServerTime: eventId => run(eventId, 'r1', context => context.serverTime(), true),
         getRound: eventId => run(eventId, 'r1', context => context.checked('public/round', clueValid), true),

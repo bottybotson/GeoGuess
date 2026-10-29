@@ -3,10 +3,11 @@
         <p v-if="loading" role="status">Loading the round…</p>
         <p v-if="error" role="alert">We couldn’t confirm the round. Check your connection and retry.</p>
         <button v-if="error" type="button" @click="refresh">Retry connection</button>
+        <EventRoundTimer v-if="phase === 'guessing'" :timing="timing" :now-ms="nowMs" :connected="timingConnected" />
         <EventRoundResults v-if="phase === 'reveal' && reveal" :reveal="reveal" />
         <EventRoundPlay
             v-else-if="round && phase !== 'reveal'"
-            :round="round" :phase="phase" :maps-loader="mapsLoader"
+            :round="round" :phase="effectivePhase" :maps-loader="mapsLoader"
             :submission-state="submissionState" :submitted-guess="submittedGuess"
             @submit="submit"
         />
@@ -16,11 +17,14 @@
 <script>
 import EventRoundPlay from '@/components/event/EventRoundPlay.vue';
 import EventRoundResults from '@/components/event/EventRoundResults.vue';
+import EventRoundTimer from '@/components/event/EventRoundTimer.vue';
+import timingView from '@/event/timing-view';
 
 export default {
     name: 'EventGuestRound',
     inheritAttrs: false,
-    components: { EventRoundPlay, EventRoundResults },
+    mixins: [timingView],
+    components: { EventRoundPlay, EventRoundResults, EventRoundTimer },
     props: {
         eventId: { type: String, required: true },
         phase: { type: String, required: true },
@@ -31,10 +35,20 @@ export default {
         return { round: null, reveal: null, submittedGuess: null, submissionState: 'submitting',
             loading: false, error: false, epoch: 0, scheduled: false, gone: false };
     },
+    computed: {
+        timingExpired() {
+            return !!this.timing && Number.isSafeInteger(this.nowMs) && this.timing.deadlineMs <= this.nowMs;
+        },
+        effectivePhase() {
+            if (this.phase === 'guessing' && (!this.timingConnected || !this.timingKnown ||
+                !Number.isSafeInteger(this.nowMs) || this.timingExpired)) return 'closed';
+            return this.phase;
+        },
+    },
     watch: {
-        eventId() { this.schedule(); },
-        phase() { this.schedule(); },
-        roundClient() { this.schedule(); },
+        eventId() { this.observeTiming(this.roundClient, this.eventId, this.phase === 'guessing'); this.schedule(); },
+        phase(value) { this.observeTiming(this.roundClient, this.eventId, value === 'guessing'); this.schedule(); },
+        roundClient() { this.observeTiming(this.roundClient, this.eventId, this.phase === 'guessing'); this.schedule(); },
     },
     mounted() { this.refresh(); },
     beforeDestroy() { this.gone = true; this.epoch += 1; },
@@ -50,6 +64,7 @@ export default {
             const client = this.roundClient;
             const eventId = this.eventId;
             const phase = this.phase;
+            this.observeTiming(client, eventId, phase === 'guessing');
             const current = () => !this.gone && epoch === this.epoch && client === this.roundClient && eventId === this.eventId && phase === this.phase;
             this.loading = true;
             this.error = false;
@@ -82,6 +97,7 @@ export default {
         },
         async submit(payload) {
             if (this.loading || this.phase !== 'guessing' || !['idle', 'error'].includes(this.submissionState) ||
+                !this.timingConnected || !this.timingKnown || !Number.isSafeInteger(this.nowMs) || this.timingExpired ||
                 !this.round || !payload || payload.roundId !== this.round.id) return;
             const epoch = this.epoch;
             const client = this.roundClient;
@@ -101,6 +117,7 @@ export default {
                 }
             }
         },
+        onTimingViewError() { this.error = true; },
     },
 };
 </script>

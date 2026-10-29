@@ -8,6 +8,11 @@ const deferred = () => { let resolve; const promise = new Promise(yes => { resol
 const flush = async wrapper => { for (let i = 0; i < 8; i++) await Promise.resolve(); await wrapper.vm.$nextTick(); };
 function fixture(phase = 'guessing', overrides = {}) {
     const client = {
+        subscribeTiming: jest.fn((eventId, onChange, onError) => {
+            const listener = { eventId, onChange, onError, dispose: jest.fn() };
+            onChange({ timing: null, offsetMs: 0, connected: true });
+            return listener.dispose;
+        }),
         getRound: jest.fn().mockResolvedValue(clue),
         getOwnGuess: jest.fn().mockResolvedValue(null),
         getReveal: jest.fn().mockResolvedValue({ roundId: 'r1', answer: { lat: 1, lng: 2 }, results: {} }),
@@ -51,6 +56,56 @@ describe('guest round controller', () => {
         await flush(wrapper);
         expect(client.getReveal).toHaveBeenCalledWith('fixture');
         expect(wrapper.findComponent(EventRoundResults).exists()).toBe(true);
+    });
+
+    it('fails closed when timing is unknown or expired and preserves a restored accepted guess', async () => {
+        const accepted = { lat: 3, lng: 4 };
+        const { wrapper, client } = fixture('guessing', {
+            getOwnGuess: jest.fn().mockResolvedValue(accepted),
+            subscribeTiming: jest.fn((eventId, onChange) => {
+                onChange({ timing: { roundId: 'r1', deadlineMs: Date.now() - 1 }, offsetMs: 0, connected: true });
+                return jest.fn();
+            }),
+        });
+        await flush(wrapper);
+        expect(wrapper.findComponent(EventRoundPlay).props('phase')).toBe('closed');
+        expect(wrapper.findComponent(EventRoundPlay).props('submittedGuess')).toEqual(accepted);
+        wrapper.findComponent(EventRoundPlay).vm.$emit('submit', { roundId: 'r1', guess: accepted });
+        expect(client.submitGuess).not.toHaveBeenCalled();
+        wrapper.destroy();
+
+        const unknown = fixture('guessing', {
+            subscribeTiming: jest.fn((eventId, onChange) => {
+                onChange({ timing: null, offsetMs: null, connected: false });
+                return jest.fn();
+            }),
+        });
+        await flush(unknown.wrapper);
+        expect(unknown.wrapper.findComponent(EventRoundPlay).props('phase')).toBe('closed');
+        unknown.wrapper.destroy();
+    });
+
+    it('retries a terminal timing subscription on the same client after explicit reconnect', async () => {
+        const listeners = [];
+        const subscribeTiming = jest.fn((eventId, onChange, onError) => {
+            const listener = { onChange, onError, dispose: jest.fn() };
+            listeners.push(listener);
+            onChange({ timing: null, offsetMs: 0, connected: true });
+            return listener.dispose;
+        });
+        const { wrapper } = fixture('guessing', { subscribeTiming });
+        await flush(wrapper);
+        listeners[0].onError(new Error('offline'));
+        await wrapper.vm.$nextTick();
+        expect(wrapper.find('[role="alert"]').exists()).toBe(true);
+        expect(wrapper.find('button').text()).toBe('Retry connection');
+        await wrapper.find('button').trigger('click');
+        await flush(wrapper);
+        expect(subscribeTiming).toHaveBeenCalledTimes(2);
+        expect(listeners[0].dispose).toHaveBeenCalledTimes(1);
+        expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+        wrapper.destroy();
+        expect(listeners[1].dispose).toHaveBeenCalledTimes(1);
     });
 
     it('ignores a stale request after event change and provides explicit retry on error', async () => {
