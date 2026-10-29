@@ -10,8 +10,10 @@ const deferred = () => {
 
 function makeClient({ user = null } = {}) {
     const listeners = [];
+    const timingListeners = [];
     return {
         listeners,
+        timingListeners,
         restore: jest.fn().mockResolvedValue(user),
         signIn: jest.fn().mockResolvedValue({ uid: 'host' }),
         signOut: jest.fn().mockResolvedValue(undefined),
@@ -21,6 +23,16 @@ function makeClient({ user = null } = {}) {
             listeners.push(listener);
             return listener.dispose;
         }),
+        subscribeTiming: jest.fn((eventId, onChange, onError) => {
+            const listener = { eventId, onChange, onError, dispose: jest.fn() };
+            timingListeners.push(listener);
+            onChange({ timing: null, offsetMs: 0, connected: true });
+            return listener.dispose;
+        }),
+        getServerTime: jest.fn().mockResolvedValue({ nowMs: 100000, offsetMs: 0 }),
+        setDeadline: jest.fn().mockImplementation((eventId, deadlineMs) => Promise.resolve({
+            status: 'set', timing: { roundId: 'r1', deadlineMs },
+        })),
         start: jest.fn().mockResolvedValue({ status: 'started' }),
         close: jest.fn().mockResolvedValue({ status: 'closed' }),
         reveal: jest.fn().mockResolvedValue({ status: 'revealed' }),
@@ -38,6 +50,7 @@ async function readyHost(client = makeClient({ user: { uid: 'host' } }), eventId
     await wrapper.vm.$nextTick();
     return { wrapper, client };
 }
+const flush = async wrapper => { for (let i = 0; i < 8; i++) await Promise.resolve(); await wrapper.vm.$nextTick(); };
 
 describe('EventHost', () => {
     it('restores the host, checks server authorization before showing controls, and whitelists roster data', async () => {
@@ -133,6 +146,61 @@ describe('EventHost', () => {
         await wrapper.vm.$nextTick();
         expect(client.start).toHaveBeenCalledTimes(1);
         expect(wrapper.text()).toContain('We couldn’t confirm that update. Check the event status');
+        wrapper.destroy();
+    });
+
+    it('retains one absolute target after an uncertain write and retries that exact target', async () => {
+        const { wrapper, client } = await readyHost();
+        client.listeners[0].onChange(projection('guessing', [{ id: 'g1', nickname: 'Alex' }]));
+        await wrapper.vm.$nextTick();
+        expect(client.subscribeTiming).toHaveBeenCalledWith('party', expect.any(Function), expect.any(Function));
+        client.setDeadline.mockRejectedValueOnce(new Error('uncertain write'));
+
+        await wrapper.findAll('button').wrappers.find(button => button.text() === 'Start 2 minute timer').trigger('click');
+        await flush(wrapper);
+        expect(client.getServerTime).toHaveBeenCalledTimes(1);
+        expect(client.setDeadline).toHaveBeenCalledWith('party', 220000);
+        expect(wrapper.text()).toContain('Timing update was not confirmed');
+        const retry = wrapper.findAll('button').wrappers.find(button => button.text() === 'Retry timing update');
+        await retry.trigger('click');
+        await flush(wrapper);
+        expect(client.getServerTime).toHaveBeenCalledTimes(1);
+        expect(client.setDeadline).toHaveBeenCalledTimes(2);
+        expect(client.setDeadline).toHaveBeenLastCalledWith('party', 220000);
+        wrapper.destroy();
+        expect(client.timingListeners[0].dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('reopens an expired host timer with an extension while preserving global busy gating', async () => {
+        const { wrapper, client } = await readyHost();
+        client.listeners[0].onChange(projection('guessing', [{ id: 'g1', nickname: 'Alex' }]));
+        await wrapper.vm.$nextTick();
+        const timing = { roundId: 'r1', deadlineMs: 90000 };
+        client.timingListeners[0].onChange({ timing, offsetMs: 0, connected: true });
+        await wrapper.vm.$nextTick();
+        const pending = deferred();
+        client.setDeadline.mockReturnValue(pending.promise);
+        await wrapper.findAll('button').wrappers.find(button => button.text() === 'Add 1 minute').trigger('click');
+        await flush(wrapper);
+        expect(client.setDeadline).toHaveBeenCalledWith('party', 160000);
+        const close = wrapper.findAll('button').wrappers.find(button => button.text() === 'Close guessing');
+        expect(close.attributes('disabled')).toBe('disabled');
+        pending.resolve({ status: 'set', timing: { roundId: 'r1', deadlineMs: 160000 } });
+        await Promise.resolve();
+        await wrapper.vm.$nextTick();
+        wrapper.destroy();
+    });
+
+    it('keeps reconnect available when public status recovers but timing observation is terminal', async () => {
+        const { wrapper, client } = await readyHost();
+        client.listeners[0].onChange(projection('guessing', [{ id: 'g1', nickname: 'Alex' }]));
+        await wrapper.vm.$nextTick();
+        client.timingListeners[0].onError(new Error('offline'));
+        await wrapper.vm.$nextTick();
+        client.listeners[0].onChange(projection('guessing', [{ id: 'g1', nickname: 'Alex' }]));
+        await wrapper.vm.$nextTick();
+        expect(wrapper.findAll('button').wrappers.some(button => button.text() === 'Reconnect')).toBe(true);
+        expect(wrapper.findAll('button').wrappers.some(button => button.text() === 'Close guessing')).toBe(true);
         wrapper.destroy();
     });
 

@@ -12,11 +12,19 @@
 
         <p v-if="message" class="event-host__message" role="status" aria-live="polite">{{ message }}</p>
         <p v-if="error" class="event-host__error" role="alert">{{ error }}</p>
-        <button v-if="error && authenticated" type="button" :disabled="busy" @click="restore">Reconnect</button>
+        <button v-if="(error || timingError) && authenticated" type="button" :disabled="busy" @click="restore">Reconnect</button>
 
         <section v-if="authenticated && authorized" class="event-host__session" aria-label="Host controls">
             <button type="button" :disabled="busy" @click="signOut">Sign out</button>
             <template v-if="authorized">
+                <section v-if="phase === 'guessing'" class="event-host__timing" aria-label="Round timing">
+                    <EventRoundTimer :timing="timing" :now-ms="nowMs" :connected="timingConnected" />
+                    <EventTimingControls
+                        :timing="timing" :now-ms="nowMs" :connected="timingConnected"
+                        :busy="busy" :error="timingError" :retry-available="pendingDeadlineMs !== null"
+                        @request-duration="requestDuration" @retry="retryTiming"
+                    />
+                </section>
                 <h2>{{ title }}</h2>
                 <p>{{ phaseMessage }}</p>
                 <p>{{ guestCount }} {{ guestCount === 1 ? 'guest' : 'guests' }} in the lobby</p>
@@ -41,6 +49,10 @@
 
 <script>
 import EventRoundResults from '@/components/event/EventRoundResults.vue';
+import EventRoundTimer from '@/components/event/EventRoundTimer.vue';
+import EventTimingControls from '@/components/event/EventTimingControls.vue';
+import timingView from '@/event/timing-view';
+import { deadlineAfter, validTiming } from '@/event/timing';
 
 const PHASES = new Set(['lobby', 'guessing', 'closed', 'reveal', 'complete']);
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -60,7 +72,8 @@ function safeProjection(value) {
 export default {
     name: 'EventHost',
     inheritAttrs: false,
-    components: { EventRoundResults },
+    mixins: [timingView],
+    components: { EventRoundResults, EventRoundTimer, EventTimingControls },
     props: {
         eventId: { type: String, required: true },
         hostClient: { type: Object, required: true },
@@ -83,6 +96,8 @@ export default {
             disposer: null,
             connectScheduled: false,
             destroyed: false,
+            pendingDeadlineMs: null,
+            timingError: '',
         };
     },
     computed: {
@@ -101,10 +116,18 @@ export default {
     watch: {
         eventId() { this.scheduleReconnect(); },
         hostClient() { this.scheduleReconnect(); },
+        phase(value) {
+            if (value !== 'guessing') {
+                this.pendingDeadlineMs = null;
+                this.timingError = '';
+                this.observeTiming(this.hostClient, this.eventId, false);
+            } else if (this.authorized) this.observeTiming(this.hostClient, this.eventId);
+        },
     },
     mounted() { this.restore(); },
     beforeDestroy() {
         this.destroyed = true;
+        this.pendingDeadlineMs = null;
         this.invalidateSession();
     },
     methods: {
@@ -119,6 +142,8 @@ export default {
             this.participants = [];
             this.title = 'Birthday GeoGuess';
             this.phase = 'unavailable';
+            this.pendingDeadlineMs = null;
+            this.timingError = '';
         },
         stopSubscription() {
             const dispose = this.disposer;
@@ -130,10 +155,15 @@ export default {
         invalidateSession() {
             this.epoch += 1;
             this.stopSubscription();
+            this.observeTiming(this.hostClient, this.eventId, false);
+            this.pendingDeadlineMs = null;
+            this.timingError = '';
             this.clearPrivateState();
             this.busy = false;
         },
         scheduleReconnect() {
+            this.pendingDeadlineMs = null;
+            this.timingError = '';
             this.invalidateSession();
             this.password = '';
             this.error = '';
@@ -181,6 +211,7 @@ export default {
             this.authorized = true;
             this.message = 'Host controls are ready.';
             this.subscribe(epoch, client, eventId);
+            if (this.phase === 'guessing') this.observeTiming(client, eventId);
         },
         subscribe(epoch, client, eventId) {
             let cancelled = false;
@@ -280,6 +311,7 @@ export default {
         },
         async signOut() {
             const client = this.hostClient;
+            this.pendingDeadlineMs = null;
             this.invalidateSession();
             const epoch = this.epoch;
             this.password = '';
@@ -321,6 +353,63 @@ export default {
             } finally {
                 if (this.isCurrent(epoch, client, eventId)) this.busy = false;
             }
+        },
+        async requestDuration(request) {
+            if (!this.authorized || this.busy || this.phase !== 'guessing' || !this.timingConnected ||
+                !Number.isSafeInteger(this.serverNowMs) || this.pendingDeadlineMs !== null ||
+                !request || !Number.isSafeInteger(request.durationMs)) return;
+            const epoch = this.epoch;
+            const client = this.hostClient;
+            const eventId = this.eventId;
+            this.busy = true;
+            this.timingError = '';
+            this.error = '';
+            try {
+                const serverTime = await client.getServerTime(eventId);
+                if (!this.isCurrent(epoch, client, eventId) || this.phase !== 'guessing') return;
+                if (!serverTime || !Number.isSafeInteger(serverTime.nowMs)) throw new Error('unavailable');
+                this.pendingDeadlineMs = deadlineAfter(serverTime.nowMs, request.durationMs,
+                    validTiming(this.timing) ? this.timing.deadlineMs : null);
+                await this.writePendingDeadline(epoch, client, eventId);
+            } catch (error) {
+                if (this.isCurrent(epoch, client, eventId)) {
+                    this.timingError = 'The timing update was not confirmed. Check the event status before retrying.';
+                }
+            } finally {
+                if (this.isCurrent(epoch, client, eventId)) this.busy = false;
+            }
+        },
+        async retryTiming() {
+            if (!this.authorized || this.busy || this.phase !== 'guessing' || !this.timingConnected ||
+                this.pendingDeadlineMs === null) return;
+            const epoch = this.epoch;
+            const client = this.hostClient;
+            const eventId = this.eventId;
+            this.busy = true;
+            this.timingError = '';
+            try {
+                await this.writePendingDeadline(epoch, client, eventId);
+            } catch (error) {
+                if (this.isCurrent(epoch, client, eventId)) {
+                    this.timingError = 'The timing update was not confirmed. Check the event status before retrying.';
+                }
+            } finally {
+                if (this.isCurrent(epoch, client, eventId)) this.busy = false;
+            }
+        },
+        onTimingViewError() {
+            this.timingError = 'Timing connection lost. Reconnect to continue.';
+            this.error = 'The event connection was lost. Reconnect to try again.';
+            this.message = '';
+        },
+        async writePendingDeadline(epoch, client, eventId) {
+            const target = this.pendingDeadlineMs;
+            const result = await client.setDeadline(eventId, target);
+            if (!this.isCurrent(epoch, client, eventId) || this.phase !== 'guessing') return;
+            if (!result || !['set', 'already-set'].includes(result.status)) throw new Error('unconfirmed');
+            this.pendingDeadlineMs = null;
+            this.timingError = '';
+            this.message = 'The timing update was acknowledged.';
         },
     },
 };

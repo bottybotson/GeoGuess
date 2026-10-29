@@ -54,8 +54,8 @@ and replace `browser.cjs` with `round-browser.cjs`. Do not run both suites at
 once. This fixture creates an ephemeral password organizer and trusted event
 inside the demo emulators; it does not create a usable live organizer or event.
 
-The scenario signs in the host, joins two guests, starts an untimed round,
-submits two pins, restores an accepted guess after reload, closes guesses and
+The scenario signs in the host, joins two guests, starts a round, initializes a two-minute timer, extends it by exactly one
+minute while both guests and the presenter observe it, submits two pins, restores an accepted guess after reload, closes guesses and
 reveals distance/points on guest and presenter pages. It checks host/guest
 identity isolation, no presenter anonymous signup, exact panorama/POV arguments,
 and narrow-screen overflow. Google widgets are synthetic and all external
@@ -65,7 +65,12 @@ real Street View demonstration.
 
 Actual deployment still requires reviewed live rules, a durable organizer and
 trusted event seed, provider setup, a valid curated panorama, Maps restrictions
-and a hosting decision. This prototype has one untimed round; adjustable timing,
-subsequent rounds and cumulative rankings remain separate requirements. See
+and a hosting decision. This prototype has one round, initially untimed; the host can start a timer
+and extend it while guessing. Subsequent rounds and cumulative rankings remain
+separate requirements. See
 [the protocol proof](../event-round/README.md) for server boundaries and the
 independent 50-client admission/scoring checks.
+
+Verified on 2026-10-29: the routed timing scenario passed in 14.1 seconds, exit
+0 with clean Auth/Database emulator shutdown. It uses real local Firebase
+services and synthetic Google widgets; it does not verify live imagery.

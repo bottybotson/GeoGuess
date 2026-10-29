@@ -34,7 +34,7 @@ const GOOGLE_FIXTURE = `
 })();
 `;
 
-test('one untimed routed round with real auth/rules and synthetic Google widgets', {timeout:120000}, async()=>{
+test('one routed round with host-adjusted timing, real auth/rules and synthetic Google widgets', {timeout:120000}, async()=>{
  let env,browser;
  try{
   const email=`host-${randomBytes(5).toString('hex')}@example.test`;
@@ -90,6 +90,18 @@ test('one untimed routed round with real auth/rules and synthetic Google widgets
   await host.getByRole('button',{name:'Sign in',exact:true}).click();
   await host.getByRole('button',{name:'Start game',exact:true}).waitFor({timeout:30000});
   await host.getByRole('button',{name:'Start game',exact:true}).click();
+  await host.getByRole('button',{name:'Start 2 minute timer',exact:true}).waitFor({timeout:30000});
+  await host.getByRole('button',{name:'Start 2 minute timer',exact:true}).click();
+  for(const page of[a,b,presenter])await page.getByText(/^Time remaining: /).waitFor({timeout:30000});
+  let firstTiming;
+  await env.withSecurityRulesDisabled(async c=>{firstTiming=(await get(ref(c.database(),`events/${EVENT}/public/timing`))).val();});
+  assert.equal(firstTiming.roundId,'r1');
+  await host.getByRole('button',{name:'Add 1 minute',exact:true}).click();
+  await host.getByText(/^Time remaining: 0[23]:/).waitFor({timeout:30000});
+  let extendedTiming;
+  await env.withSecurityRulesDisabled(async c=>{extendedTiming=(await get(ref(c.database(),`events/${EVENT}/public/timing`))).val();});
+  assert.equal(extendedTiming.deadlineMs-firstTiming.deadlineMs,60000,'One extension must add exactly one minute');
+  for(const page of[a,b,presenter])await page.getByText(/^Time remaining: 0[23]:/).waitFor({timeout:30000});
   for(const[page,guess]of[[a,{lat:10,lng:20}],[b,{lat:11,lng:21}]]){
    await page.locator('[data-maps-fixture="ready"]').waitFor({timeout:30000});
    await page.evaluate(value=>{window.__mapsFixture.guess=value},guess);

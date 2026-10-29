@@ -49,5 +49,9 @@ export function createHostClient(database, auth) {
         close: round.close,
         reveal: round.reveal,
         getReveal: round.getReveal,
+        subscribeTiming: round.subscribeTiming,
+        setDeadline: round.setDeadline,
+        getTiming: round.getTiming,
+        getServerTime: round.getServerTime,
     };
 }
