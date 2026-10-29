@@ -1,0 +1,8 @@
+{
+  "name": "geoguess-event-setup-operator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Trusted operator-only event provisioning; never bundled into the web app",
+  "engines": { "node": ">=20.14.0" },
+  "dependencies": { "firebase-admin": "13.6.0" }
+}

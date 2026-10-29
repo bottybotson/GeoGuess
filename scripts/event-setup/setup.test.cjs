@@ -68,7 +68,7 @@ test('emulator conditional write uses exact ETag and treats 412 as conflict with
     assert.equal(calls[1].options.headers['if-match'], '"null_etag"');
     assert.equal(calls[1].options.redirect, 'error');
 });
-test('CLI prints no supplied values on dryrun/errors and has no live apply switch', () => {
+test('CLI prints no supplied values and refuses generic or unguarded apply', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'geoguess-seed-'));
     try {
         const file = path.join(dir, 'input.json'); fs.writeFileSync(file, JSON.stringify(fixture()));
