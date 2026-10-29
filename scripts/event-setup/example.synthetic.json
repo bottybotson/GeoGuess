@@ -1,0 +1,19 @@
+{
+  "projectId": "demo-geoguess-admission",
+  "databaseUrl": "https://demo-geoguess-admission.firebaseio.com",
+  "eventId": "synthetic-rehearsal-a",
+  "event": {
+    "hostUid": "synthetic-host-not-an-account",
+    "public": { "title": "Synthetic rehearsal", "phase": "lobby" },
+    "private": {
+      "round": {
+        "id": "r1",
+        "panoramaId": "fictional-panorama-not-for-live-use",
+        "heading": 37,
+        "pitch": -4,
+        "answer": { "lat": 10, "lng": 20 },
+        "difficulty": 2000
+      }
+    }
+  }
+}
