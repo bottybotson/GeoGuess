@@ -2,6 +2,21 @@
 
 Issue [#34](https://github.com/bottybotson/GeoGuess/issues/34) asks for a novice-repeatable rehearsal of the merged, single untimed round. This is a setup contract and source-based runbook; it does not mean a live Firebase project, real Street View panorama, or public deployment has been provisioned or tested.
 
+## Prepare a round in the browser
+
+The local preparation page is `/event/setup` on the app's origin. It accepts the
+existing project/database details, organizer UID and one curated panorama with
+its heading, pitch and answer coordinate. It keeps the draft in memory and
+exports a JSON file; it does not create users, write database data or deploy
+rules. Google receives requests to render the preview. Use “Use this panorama”
+after the current scene loads, then download the configuration for the trusted
+operator tool. Do not enter passwords or service-account credentials here.
+
+The page cannot verify that the organizer, live rules or provider billing are
+ready. Real panorama loading remains a separate check; synthetic unit fixtures
+are not evidence of working imagery. The rest of this guide describes those
+remaining prerequisites.
+
 ## What exists today
 
 The event flow is separate from the legacy `/room/:roomName` game. The routes are:

@@ -20,6 +20,12 @@ const router = new Router({
     mode: 'history',
     routes: [
         {
+            path: '/event/setup',
+            name: 'event-setup',
+            component: () => import('@/pages/event/EventSetup.vue'),
+            props: { mapsLoader: eventMapsLoader },
+        },
+        {
             path: '/event/:eventId/join',
             name: 'event-join',
             component: () => import('@/pages/event/EventGuestLobby.vue'),
