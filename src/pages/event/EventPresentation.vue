@@ -27,6 +27,11 @@
             <button v-if="revealError" type="button" class="event-presentation-page__retry" @click="retry">Reconnect</button>
         </section>
         <template v-else>
+            <EventRoundTimer
+                v-if="projection.phase === 'guessing'"
+                class="event-presentation-page__timer"
+                :timing="timing" :now-ms="nowMs" :connected="timingConnected"
+            />
             <EventLobbyPresentation
                 :title="projection.title"
                 :phase="projection.phase"
@@ -46,6 +51,8 @@
 import EventLobbyPresentation from '@/components/event/EventLobbyPresentation.vue';
 import EventJoinQr, { sanitizeJoinUrl } from '@/components/event/EventJoinQr.vue';
 import EventRoundResults from '@/components/event/EventRoundResults.vue';
+import EventRoundTimer from '@/components/event/EventRoundTimer.vue';
+import timingView from '@/event/timing-view';
 
 const PHASES = new Set(['lobby', 'guessing', 'closed', 'reveal', 'complete']);
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -66,7 +73,8 @@ function safeProjection(value) {
 export default {
     name: 'EventPresentation',
     inheritAttrs: false,
-    components: { EventLobbyPresentation, EventJoinQr, EventRoundResults },
+    mixins: [timingView],
+    components: { EventLobbyPresentation, EventJoinQr, EventRoundResults, EventRoundTimer },
     props: {
         eventId: { type: String, required: true },
         lobbyClient: { type: Object, required: true },
@@ -126,6 +134,7 @@ export default {
             this.stopSubscription();
             this.status = 'loading';
             this.projection = null;
+        this.observeTiming(this.roundClient, this.eventId, false);
             this.publicReveal = null;
             this.revealError = false;
             this.revealLoading = false;
@@ -154,6 +163,7 @@ export default {
                 }
                 this.projection = safe;
                 this.status = 'ready';
+                this.observeTiming(this.roundClient, eventId, safe.phase === 'guessing');
                 if (safe.phase === 'reveal' && this.roundClient) this.loadReveal(epoch);
             };
             const onError = () => {
@@ -181,6 +191,12 @@ export default {
         },
         retry() {
             this.connect();
+        },
+        onTimingViewError() {
+            if (this.status === 'ready') {
+                this.status = 'error';
+                this.errorMessage = 'The public event connection was lost. Reconnect to continue.';
+            }
         },
         async loadReveal(epoch) {
             if (this.publicReveal || this.revealLoading) return;
@@ -210,6 +226,7 @@ export default {
 }
 .event-presentation-page__results { min-height: 100vh; padding: clamp(1rem, 4vw, 3rem); background: #fff; color: #17212b; }
 .event-presentation-page__results .event-round-results { font-size: clamp(1.25rem, 2.4vw, 2rem); }
+.event-presentation-page__timer { width: fit-content; margin: 1rem; padding: 0.75rem 1.25rem; border-radius: 0.4rem; background: #fff; color: #17212b; }
 
 .event-presentation-page__message {
     box-sizing: border-box;

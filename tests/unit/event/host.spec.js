@@ -66,3 +66,11 @@ describe('separate organizer identity', () => {
         await expect(client.signIn('host@example.test', 'password')).rejects.toBe(failure);
     });
 });
+
+
+test('host exposes the same round timing services without replacing its separate identity', () => {
+    const methods = Object.fromEntries(['subscribeTiming', 'setDeadline', 'getTiming', 'getServerTime'].map(name => [name, jest.fn()]));
+    createRoundClient.mockReturnValue(methods);
+    const client = createHostClient({}, authFixture());
+    Object.keys(methods).forEach(name => expect(client[name]).toBe(methods[name]));
+});
