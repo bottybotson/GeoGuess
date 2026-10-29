@@ -45,8 +45,9 @@ async function provision(input, target, { apply = false, adapter } = {}) {
     if (!user || user.uid !== validated.event.hostUid || user.disabled !== false || !Array.isArray(user.providerData) ||
         !user.providerData.some(provider => provider && provider.providerId === 'password')) throw fail('invalid-host');
     let created;
-    try { created = await adapter.createIfAbsent(validated.eventId, validated.event); } catch { throw fail('create-failed'); }
+    try { created = await adapter.createIfAbsent(validated.eventId, validated.event); }
+    catch (error) { throw fail(error && error.code === 'create-unconfirmed' ? 'create-unconfirmed' : 'create-failed'); }
     if (created !== true) throw fail('event-exists');
-    return { status: 'created-emulator-event', identityVerified: true, panoramaVerified: false, written: true };
+    return { status: adapter.kind === 'live' ? 'created-live-event' : 'created-emulator-event', identityVerified: true, panoramaVerified: false, written: true };
 }
 module.exports = { validate, provision, fail };
