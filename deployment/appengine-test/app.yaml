@@ -1,0 +1,27 @@
+# Proposal: review region, runtime support, static firewall coverage and IAM first.
+runtime: nodejs22
+env: standard
+entrypoint: node server.cjs
+instance_class: F1
+automatic_scaling:
+  min_instances: 0
+  max_instances: 1
+handlers:
+  - url: /(.*\.(css|js|json|map|png|jpg|jpeg|gif|svg|ico|webp|avif|woff|woff2|ttf|eot|txt|xml|webmanifest))
+    static_files: dist/\1
+    upload: dist/.*\.(css|js|json|map|png|jpg|jpeg|gif|svg|ico|webp|avif|woff|woff2|ttf|eot|txt|xml|webmanifest)
+    secure: always
+    expiration: 0s
+    http_headers:
+      Cache-Control: no-store
+      X-Robots-Tag: noindex, nofollow, noarchive
+      X-Content-Type-Options: nosniff
+  - url: /.*
+    static_files: dist/index.html
+    upload: dist/index.html
+    secure: always
+    expiration: 0s
+    http_headers:
+      Cache-Control: no-store
+      X-Robots-Tag: noindex, nofollow, noarchive
+      X-Content-Type-Options: nosniff
