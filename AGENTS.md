@@ -26,3 +26,9 @@
 - Test 50-client admission, guest 51 rejection, refresh/reconnect, duplicate actions, missed guesses, and read-only presenter behavior before claiming event readiness. No random lucky points for non-submissions.
 - Shared session state and server-enforced access boundaries must govern gameplay; UI hiding alone is not authorization. Guest disconnect/unmount must not delete or advance the session.
 - Never commit credentials, service-account files, personal venue data, or real event configuration. Browser API keys are visible: restrict them with provider controls, not obscurity. Inspect variable presence only and use secure settings for values.
+
+## Rehearsal access
+
+- Before public launch, the user requires access limited to their own testing devices. Hosting is currently disabled; do not republish an unrestricted site while this access policy is unresolved.
+- Firebase Hosting has no native IP allowlist. Never substitute the cloud agent/proxy IP for the user's device IP, or promise continuous visitor monitoring without a deployed enforcement mechanism.
+- Re-enable only under the user's agreed test-access policy. Preserve test data and reviewed artifacts while offline.
