@@ -4,16 +4,17 @@
             This round is unavailable.
         </p>
         <template v-else>
-            <EventPanorama v-if="hasPanorama" :round="round" :maps-loader="mapsLoader" />
-            <p v-else class="event-round-play__status">Street View is unavailable for this round.</p>
-            <p class="event-round-play__instruction">Explore Street View, then tap the world map to place your guess.</p>
+            <EventPanorama v-if="phase !== 'reveal' && hasPanorama" :round="round" :maps-loader="mapsLoader" />
+            <p v-else-if="phase !== 'reveal'" class="event-round-play__status">Street View is unavailable for this round.</p>
+            <p v-if="phaseOpen" class="event-round-play__instruction">Explore Street View, then tap the world map to place your guess.</p>
             <EventGuessMap
                 :maps-loader="mapsLoader"
                 :disabled="!canEdit"
                 :selected="visibleGuess"
+                :answer="revealedAnswer"
                 @select="selectGuess"
             />
-            <section class="event-round-play__controls" aria-label="Submit your guess">
+            <section v-if="phase !== 'reveal'" class="event-round-play__controls" aria-label="Submit your guess">
                 <p v-if="statusMessage" class="event-round-play__status" role="status">{{ statusMessage }}</p>
                 <button type="button" :disabled="!canSubmit" @click="submitGuess">
                     {{ submissionState === 'submitting' ? 'Submitting…' : 'Submit my guess' }}
@@ -48,12 +49,13 @@ export default {
         mapsLoader: { type: Function, required: true },
         submissionState: { type: String, default: 'idle' },
         submittedGuess: { type: Object, default: null },
+        answer: { type: Object, default: null },
     },
     data() { return { selection: null, submitLatched: false }; },
     computed: {
         validRound() {
             return !!this.round && typeof this.round.id === 'string' && this.round.id.length > 0 &&
-                hasPanorama(this.round);
+                (this.phase === 'reveal' || hasPanorama(this.round));
         },
         knownPhase() { return ['lobby', 'guessing', 'closed', 'reveal', 'complete'].includes(this.phase); },
         phaseOpen() { return this.phase === 'guessing'; },
@@ -62,7 +64,11 @@ export default {
                 ['idle', 'error'].includes(this.submissionState);
         },
         canSubmit() { return this.canEdit && !this.submitLatched && validCoords(this.visibleGuess); },
-        visibleGuess() { return validCoords(this.submittedGuess) ? this.submittedGuess : this.selection; },
+        visibleGuess() {
+            if (validCoords(this.submittedGuess)) return this.submittedGuess;
+            return this.phase === 'reveal' ? null : this.selection;
+        },
+        revealedAnswer() { return this.phase === 'reveal' && validCoords(this.answer) ? this.answer : null; },
         hasPanorama() { return hasPanorama(this.round); },
         statusMessage() {
             if (this.submissionState === 'accepted') return 'Your guess is saved.';

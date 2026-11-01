@@ -1,15 +1,20 @@
 <template>
-    <div class="event-guess-map-shell">
-        <div ref="map" class="event-guess-map" role="application" aria-label="Choose your guess on the world map"></div>
-        <div v-if="status === 'loading'" class="map-message" role="status" aria-live="polite">
-            Loading the guess map…
+    <section>
+        <div class="event-guess-map-shell">
+            <div ref="map" class="event-guess-map" role="application" :aria-label="hasAnswer ? 'Round result map: correct location and saved guess' : 'Choose your guess on the world map'"></div>
+            <div v-if="status === 'loading'" class="map-message" role="status" aria-live="polite">
+                Loading the guess map…
+            </div>
+            <div v-else-if="status === 'error'" class="map-message map-error" role="alert">
+                <p>The guess map could not be loaded.</p>
+                <p>If this keeps happening, reload this page.</p>
+                <button type="button" class="map-retry" @click="retry">Try again</button>
+            </div>
         </div>
-        <div v-else-if="status === 'error'" class="map-message map-error" role="alert">
-            <p>The guess map could not be loaded.</p>
-            <p>If this keeps happening, reload this page.</p>
-            <button type="button" class="map-retry" @click="retry">Try again</button>
-        </div>
-    </div>
+        <p v-if="hasAnswer" class="event-guess-map-legend" aria-label="Map legend">
+            A — Correct location · {{ hasGuess ? 'G — Your saved guess' : 'No saved guess' }}
+        </p>
+    </section>
 </template>
 
 <script>
@@ -27,11 +32,13 @@ export default {
         mapsLoader: { type: Function, required: true },
         disabled: { type: Boolean, default: false },
         selected: { type: Object, default: null },
+        answer: { type: Object, default: null },
     },
     data() {
         return {
             map: null,
             marker: null,
+            answerMarker: null,
             clickListener: null,
             generation: 0,
             mapsApi: null,
@@ -39,8 +46,13 @@ export default {
             timeoutId: null,
         };
     },
+    computed: {
+        hasAnswer() { return validCoords(this.answer); },
+        hasGuess() { return validCoords(this.selected); },
+    },
     watch: {
-        selected(value) { this.updateMarker(value); },
+        selected(value) { this.updateMarker(value); this.fitReveal(); },
+        answer() { this.updateAnswer(); },
         mapsLoader() { this.createMap(); },
     },
     mounted() {
@@ -79,7 +91,7 @@ export default {
                 this.mapsApi = maps;
                 this.status = 'ready';
                 this.clickListener = maps.event.addListener(map, 'click', (event) => {
-                    if (this.disabled || generation !== this.generation || !event || !event.latLng) return;
+                    if (this.disabled || this.hasAnswer || generation !== this.generation || !event || !event.latLng) return;
                     const lat = typeof event.latLng.lat === 'function' ? event.latLng.lat() : NaN;
                     const lng = typeof event.latLng.lng === 'function' ? event.latLng.lng() : NaN;
                     const coords = { lat, lng };
@@ -88,6 +100,7 @@ export default {
                     this.$emit('select', { lat, lng });
                 });
                 this.updateMarker(this.selected, maps);
+                this.updateAnswer();
             } catch (error) {
                 if (generation === this.generation) {
                     this.disposeMap();
@@ -118,8 +131,38 @@ export default {
                 try { this.marker.setMap(null); } catch (error) { /* Provider map may already be disposed. */ }
             }
             this.marker = null;
+            if (this.answerMarker && typeof this.answerMarker.setMap === 'function') {
+                try { this.answerMarker.setMap(null); } catch (error) { /* Provider map may already be disposed. */ }
+            }
+            this.answerMarker = null;
             this.map = null;
             this.mapsApi = null;
+        },
+        updateAnswer() {
+            if (!this.map) return;
+            if (!this.hasAnswer) {
+                if (this.answerMarker) this.answerMarker.setMap(null);
+                this.answerMarker = null;
+                if (typeof this.map.setOptions === 'function') this.map.setOptions({ maxZoom: null });
+                return;
+            }
+            const position = { lat: this.answer.lat, lng: this.answer.lng };
+            if (!this.answerMarker) {
+                this.answerMarker = new this.mapsApi.Marker({ map: this.map, position,
+                    title: 'Correct location (A)', label: { text: 'A', color: '#fff', fontWeight: 'bold' } });
+            } else {
+                this.answerMarker.setPosition(position);
+            }
+            this.fitReveal();
+        },
+        fitReveal() {
+            if (!this.map || !this.hasAnswer) return;
+            const bounds = new this.mapsApi.LatLngBounds();
+            bounds.extend({ lat: this.answer.lat, lng: this.answer.lng });
+            if (this.hasGuess) bounds.extend({ lat: this.selected.lat, lng: this.selected.lng });
+            // Bound the zoom for coincident pins and unanswered rounds, too.
+            this.map.setOptions({ maxZoom: 16 });
+            this.map.fitBounds(bounds, { top: 56, right: 56, bottom: 56, left: 56 });
         },
         updateMarker(value, api) {
             if (!this.map) return;
@@ -131,7 +174,12 @@ export default {
             if (!this.marker) {
                 const maps = api || this.mapsApi;
                 if (!maps || !maps.Marker) return;
-                this.marker = new maps.Marker({ map: this.map, position: { lat: value.lat, lng: value.lng } });
+                this.marker = new maps.Marker({
+                    map: this.map, position: { lat: value.lat, lng: value.lng },
+                    title: 'Your guess (G)', label: { text: 'G', color: '#fff', fontWeight: 'bold' },
+                    icon: { path: 'M -1,0 a 1,1 0 1,0 2,0 a 1,1 0 1,0 -2,0',
+                        scale: 12, fillColor: '#145b9e', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
+                });
             } else {
                 this.marker.setPosition({ lat: value.lat, lng: value.lng });
                 this.marker.setMap(this.map);
@@ -146,6 +194,7 @@ export default {
 .event-guess-map { width: 100%; height: 100%; min-height: 18rem; }
 .map-message { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 1rem; text-align: center; background: rgba(238, 242, 245, 0.94); font-size: 1rem; }
 .map-message p { margin: 0; }
+.event-guess-map-legend { margin: 0.5rem 0 0; font: inherit; }
 .map-retry { min-height: 3rem; padding: 0.65rem 1.25rem; border: 0; border-radius: 0.25rem; background: #174ea6; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
 .map-retry:focus { outline: 3px solid #111; outline-offset: 2px; }
 </style>
