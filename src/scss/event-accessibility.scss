@@ -267,3 +267,13 @@ $event-error: #8b1e1e;
     min-width: 0;
     max-width: 100%;
 }
+
+.event-round-results.event-round-results summary {
+    min-height: 3rem;
+    padding: 0.5rem 0;
+    cursor: pointer;
+}
+.event-round-results.event-round-results summary:focus-visible {
+    outline: 4px solid $event-blue-focus;
+    outline-offset: 3px;
+}
