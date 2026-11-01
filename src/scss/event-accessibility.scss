@@ -1,0 +1,269 @@
+// Event routes use their own surfaces so the legacy Vuetify theme preference
+// cannot pair dark foregrounds with a dark page background (or vice versa).
+$event-ink: #17212b;
+$event-muted: #405264;
+$event-blue: #07528a;
+$event-blue-focus: #075fa8;
+$event-border: #435873;
+$event-disabled: #5d6b78;
+$event-canvas: #ffffff;
+$event-error: #8b1e1e;
+
+.event-setup.event-setup,
+.event-host.event-host,
+.event-guest-lobby.event-guest-lobby,
+.event-guest-round.event-guest-round,
+.event-presentation-page.event-presentation-page,
+.event-presentation-page__results.event-presentation-page__results {
+    background-color: $event-canvas;
+    color: $event-ink;
+    color-scheme: light;
+}
+
+.event-setup.event-setup,
+.event-host.event-host,
+.event-guest-lobby.event-guest-lobby,
+.event-guest-round.event-guest-round {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 100vh;
+    font-family: Arial, sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.event-host.event-host { font-size: 1.2rem; }
+.event-presentation-page.event-presentation-page { background-color: #10263d; color: #fff; color-scheme: dark; }
+.event-presentation.event-presentation { background-color: #10263d; color: #fff; color-scheme: dark; }
+.event-presentation-page__results.event-presentation-page__results { color-scheme: light; }
+
+// Keep the legacy event text readable on the fixed white event surfaces.
+.event-setup.event-setup small,
+.event-setup.event-setup [role='status'],
+.event-guest-lobby.event-guest-lobby .event-guest-lobby__phase,
+.event-guest-lobby.event-guest-lobby .event-guest-lobby__count,
+.event-guest-lobby.event-guest-lobby .event-guest-lobby__connection,
+.event-guest-round.event-guest-round [role='status'],
+.event-guest-round.event-guest-round [role='alert'],
+.event-host.event-host .event-host__message,
+.event-host.event-host .event-host__timing,
+.event-host.event-host .event-host__session > p,
+.event-timing-controls.event-timing-controls .event-timing-controls__status {
+    color: $event-muted;
+}
+
+.event-host.event-host .event-host__error,
+.event-setup.event-setup [role='alert'],
+.event-guest-lobby.event-guest-lobby [role='alert'],
+.event-guest-round.event-guest-round [role='alert'],
+.event-panorama-preview.event-panorama-preview .event-panorama-preview__message[role='alert'] {
+    color: $event-error;
+}
+
+.event-setup.event-setup input,
+.event-host.event-host input,
+.event-setup.event-setup textarea,
+.event-host.event-host textarea {
+    box-sizing: border-box;
+    min-height: 3rem;
+    padding: 0.6rem 0.75rem;
+    border: 2px solid $event-border;
+    border-radius: 0.25rem;
+    background-color: $event-canvas;
+    color: $event-ink;
+    font: inherit;
+}
+
+.event-setup.event-setup input::placeholder,
+.event-host.event-host input::placeholder,
+.event-setup.event-setup textarea::placeholder,
+.event-host.event-host textarea::placeholder {
+    color: $event-muted;
+    opacity: 1;
+}
+
+.event-setup.event-setup input:disabled,
+.event-host.event-host input:disabled,
+.event-setup.event-setup textarea:disabled,
+.event-host.event-host textarea:disabled {
+    border-color: $event-disabled;
+    background-color: #edf1f4;
+    color: $event-muted;
+    opacity: 1;
+}
+
+.event-setup.event-setup .event-setup__actions > button,
+.event-host.event-host > button,
+.event-host.event-host :is(.event-host__sign-in, .event-host__session) > button,
+.event-guest-lobby.event-guest-lobby > .event-guest-lobby__retry,
+.event-guest-round.event-guest-round > button,
+.event-presentation-page.event-presentation-page .event-presentation-page__retry,
+.event-timing-controls.event-timing-controls button,
+.event-panorama-preview.event-panorama-preview .event-panorama-preview__choice {
+    box-sizing: border-box;
+    min-width: 3rem;
+    min-height: 3rem;
+    padding: 0.6rem 1rem;
+    border: 2px solid $event-blue;
+    border-radius: 0.4rem;
+    background-color: $event-blue;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.event-host.event-host > button:disabled,
+.event-host.event-host :is(.event-host__sign-in, .event-host__session) > button:disabled,
+.event-guest-lobby.event-guest-lobby > .event-guest-lobby__retry:disabled,
+.event-guest-round.event-guest-round > button:disabled,
+.event-presentation-page.event-presentation-page .event-presentation-page__retry:disabled,
+.event-timing-controls.event-timing-controls button:disabled,
+.event-panorama-preview.event-panorama-preview .event-panorama-preview__choice:disabled,
+.event-setup.event-setup .event-setup__actions > button:disabled {
+    border-color: $event-disabled;
+    background-color: $event-disabled;
+    color: #fff;
+    opacity: 1;
+    cursor: not-allowed;
+}
+
+.event-setup.event-setup .event-setup__actions > button:focus-visible,
+.event-setup.event-setup input:focus-visible,
+.event-setup.event-setup textarea:focus-visible,
+.event-host.event-host > button:focus-visible,
+.event-host.event-host :is(.event-host__sign-in, .event-host__session) > button:focus-visible,
+.event-host.event-host input:focus-visible,
+.event-host.event-host textarea:focus-visible,
+.event-guest-lobby.event-guest-lobby > .event-guest-lobby__retry:focus-visible,
+.event-guest-round.event-guest-round > button:focus-visible,
+.event-presentation-page.event-presentation-page .event-presentation-page__retry:focus-visible,
+.event-timing-controls.event-timing-controls button:focus-visible,
+.event-panorama-preview.event-panorama-preview .event-panorama-preview__choice:focus-visible {
+    outline: 4px solid $event-blue-focus;
+    outline-offset: 3px;
+}
+
+.event-round-results.event-round-results {
+    background-color: $event-canvas;
+    color: $event-ink;
+    color-scheme: light;
+}
+
+.event-round-results.event-round-results li { border-bottom-color: #687987; }
+.event-round-results.event-round-results li.is-current { border-color: $event-blue; }
+.event-round-timer.event-round-timer { color: $event-ink; }
+.event-round-play.event-round-play { color: $event-ink; }
+.event-round-play.event-round-play .event-round-play__controls button {
+    min-width: 3rem;
+    min-height: 3rem;
+    border: 2px solid $event-blue;
+    background-color: $event-blue;
+    color: #fff;
+}
+.event-round-play.event-round-play .event-round-play__controls button:disabled {
+    border-color: $event-disabled;
+    background-color: $event-disabled;
+    color: #fff;
+    opacity: 1;
+}
+.event-round-play.event-round-play .event-round-play__controls button:focus-visible {
+    outline: 4px solid $event-blue-focus;
+    outline-offset: 3px;
+}
+
+.event-join.event-join { color: $event-ink; color-scheme: light; }
+.event-join.event-join .event-join__count { color: $event-muted; }
+.event-join.event-join .event-join__input {
+    border-color: $event-border;
+    background-color: $event-canvas;
+    color: $event-ink;
+}
+.event-join.event-join .event-join__input::placeholder { color: $event-muted; opacity: 1; }
+.event-join.event-join .event-join__input:disabled {
+    border-color: $event-disabled;
+    background-color: #edf1f4;
+    color: $event-muted;
+    opacity: 1;
+}
+.event-join.event-join .event-join__button { border-color: $event-blue; background-color: $event-blue; color: #fff; }
+.event-join.event-join .event-join__button:disabled { border-color: $event-disabled; background-color: $event-disabled; color: #fff; }
+.event-join.event-join .event-join__input:focus-visible,
+.event-join.event-join .event-join__button:focus-visible { outline: 4px solid $event-blue-focus; outline-offset: 3px; }
+
+.event-presentation-page__message.event-presentation-page__message {
+    background-color: #10263d;
+    color: #fff;
+}
+.event-presentation-page__timer.event-presentation-page__timer {
+    background-color: $event-canvas;
+    color: $event-ink;
+    color-scheme: light;
+}
+.event-presentation-page__retry.event-presentation-page__retry {
+    min-height: 3rem;
+    border-color: #fff;
+    background-color: #fff;
+    color: #10263d;
+}
+.event-presentation-page__retry.event-presentation-page__retry:focus-visible {
+    outline: 4px solid #ffd166;
+    outline-offset: 3px;
+}
+.event-presentation.event-presentation .event-presentation__status {
+    border-color: #c6e6ff;
+    background-color: #183a59;
+    color: #fff;
+}
+.event-presentation.event-presentation .event-presentation__join-url { color: #fff; }
+
+@media (max-width: 40rem) {
+    .event-setup.event-setup,
+    .event-host.event-host,
+    .event-guest-lobby.event-guest-lobby,
+    .event-guest-round.event-guest-round,
+    .event-presentation.event-presentation,
+    .event-round-results.event-round-results {
+        max-width: 100%;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .event-host.event-host > button,
+    .event-host.event-host :is(.event-host__sign-in, .event-host__session) > button,
+    .event-setup.event-setup .event-setup__actions > button,
+    .event-timing-controls.event-timing-controls button,
+    .event-guest-lobby.event-guest-lobby > .event-guest-lobby__retry,
+    .event-presentation-page.event-presentation-page .event-presentation-page__retry,
+    .event-round-play.event-round-play .event-round-play__controls button {
+        min-height: 3rem;
+    }
+}
+
+// Scope action rules to app-owned controls: provider widgets keep their styling.
+.event-guess-map-shell.event-guess-map-shell > .map-message > .map-retry,
+.event-panorama.event-panorama > .event-panorama__message > button {
+    min-width: 3rem;
+    min-height: 3rem;
+    border: 2px solid $event-blue;
+    border-radius: 0.4rem;
+    background: $event-blue;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+}
+.event-guess-map-shell.event-guess-map-shell > .map-message > .map-retry:focus-visible,
+.event-panorama.event-panorama > .event-panorama__message > button:focus-visible {
+    outline: 4px solid $event-blue-focus;
+    outline-offset: 3px;
+}
+
+.event-guest-round.event-guest-round { min-height: 0; }
+.event-setup.event-setup fieldset,
+.event-setup.event-setup input,
+.event-host.event-host input,
+.event-join.event-join .event-join__input {
+    min-width: 0;
+    max-width: 100%;
+}
