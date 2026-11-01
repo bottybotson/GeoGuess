@@ -3,7 +3,10 @@
         <h1>Round results</h1>
         <section v-if="validReveal" class="event-round-results__answer" aria-label="Correct location">
             <h2>Correct location</h2>
-            <p>Latitude: {{ reveal.answer.lat }} · Longitude: {{ reveal.answer.lng }}</p>
+            <details>
+                <summary>Location coordinates</summary>
+                <p>Latitude: {{ reveal.answer.lat }} · Longitude: {{ reveal.answer.lng }}</p>
+            </details>
         </section>
         <p v-else class="event-round-results__status" role="status">Round results are unavailable.</p>
         <section v-if="validReveal" class="event-round-results__list" aria-label="Player results">

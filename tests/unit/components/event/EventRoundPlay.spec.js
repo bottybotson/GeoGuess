@@ -3,7 +3,7 @@ import EventRoundPlay from '@/components/event/EventRoundPlay.vue';
 
 const round = { id: 'r1', panoramaId: 'pano-1', heading: 90, pitch: 2 };
 const mapStub = {
-    props: ['selected', 'disabled', 'mapsLoader'],
+    props: ['selected', 'disabled', 'mapsLoader', 'answer'],
     template: '<button class="map-stub" :disabled="disabled" @click="$emit(\'select\', { lat: 10, lng: 20 })">map</button>',
 };
 const panoramaStub = { props: ['round', 'mapsLoader'], template: '<div class="panorama-stub"></div>' };
@@ -75,6 +75,37 @@ describe('EventRoundPlay', () => {
         await wrapper.setProps({ submissionState: 'accepted', submittedGuess: { lat: -40, lng: 120 } });
         expect(wrapper.findComponent(mapStub).props('selected')).toEqual({ lat: -40, lng: 120 });
         expect(wrapper.text()).toContain('Your guess is saved.');
+        wrapper.destroy();
+    });
+
+    it('gates the answer on reveal, keeps the same map and hides guessing actions', async () => {
+        const answer = { lat: -1, lng: -2 };
+        const saved = { lat: 3, lng: 4 };
+        const wrapper = create({ answer });
+        const map = wrapper.findComponent(mapStub).vm;
+        expect(wrapper.findComponent(mapStub).props('answer')).toBe(null);
+        await wrapper.find('.map-stub').trigger('click');
+        await wrapper.setProps({ phase: 'closed' });
+        expect(wrapper.findComponent(mapStub).vm).toBe(map);
+        expect(wrapper.findComponent(mapStub).props('answer')).toBe(null);
+        expect(wrapper.find('.event-round-play__instruction').exists()).toBe(false);
+        await wrapper.setProps({ phase: 'reveal' });
+        expect(wrapper.findComponent(mapStub).vm).toBe(map);
+        expect(wrapper.findComponent(mapStub).props()).toMatchObject({ answer, disabled: true, selected: null });
+        expect(wrapper.find('.event-round-play__controls').exists()).toBe(false);
+        expect(wrapper.find('.panorama-stub').exists()).toBe(false);
+        await wrapper.setProps({ submittedGuess: saved, submissionState: 'accepted' });
+        wrapper.vm.selectGuess({ lat: 8, lng: 9 });
+        wrapper.vm.submitGuess();
+        expect(wrapper.findComponent(mapStub).props('selected')).toEqual(saved);
+        expect(wrapper.emitted('submit')).toBeUndefined();
+        wrapper.destroy();
+    });
+
+    it('supports a direct reveal without requiring a Street View clue', () => {
+        const wrapper = create({ round: { id: 'r1' }, phase: 'reveal', answer: { lat: 0, lng: 0 } });
+        expect(wrapper.findComponent(mapStub).props('answer')).toEqual({ lat: 0, lng: 0 });
+        expect(wrapper.find('.event-round-play__controls').exists()).toBe(false);
         wrapper.destroy();
     });
 
