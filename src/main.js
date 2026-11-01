@@ -13,6 +13,7 @@ import vuetify from './plugins/vuetify';
 import './registerServiceWorker';
 import router from './router';
 import store from './store';
+import './scss/event-accessibility.scss';
 
 Vue.use(VueAxios, axios);
 
