@@ -17,6 +17,8 @@ describe('EventRoundResults', () => {
         const wrapper = mount(EventRoundResults, { propsData: { reveal } });
         expect(wrapper.text()).toContain('51.5');
         expect(wrapper.text()).toContain('-0.12');
+        expect(wrapper.find('details summary').text()).toBe('Location coordinates');
+        expect(wrapper.find('details').attributes('open')).toBeUndefined();
         expect(wrapper.findAll('.event-round-results__nickname').wrappers.map(item => item.text())).toEqual([
             'Bea', 'Zoe', 'Ari', 'No pin',
         ]);

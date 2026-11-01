@@ -4,13 +4,14 @@
         <p v-if="error" role="alert">We couldn’t confirm the round. Check your connection and retry.</p>
         <button v-if="error" type="button" @click="refresh">Retry connection</button>
         <EventRoundTimer v-if="phase === 'guessing'" :timing="timing" :now-ms="nowMs" :connected="timingConnected" />
-        <EventRoundResults v-if="phase === 'reveal' && reveal" :reveal="reveal" />
         <EventRoundPlay
-            v-else-if="round && phase !== 'reveal'"
-            :round="round" :phase="effectivePhase" :maps-loader="mapsLoader"
+            v-if="activeRound"
+            :round="activeRound" :phase="effectivePhase" :maps-loader="mapsLoader"
             :submission-state="submissionState" :submitted-guess="submittedGuess"
+            :answer="authorizedReveal ? authorizedReveal.answer : null"
             @submit="submit"
         />
+        <EventRoundResults v-if="authorizedReveal" :reveal="authorizedReveal" />
     </section>
 </template>
 
@@ -33,9 +34,17 @@ export default {
     },
     data() {
         return { round: null, reveal: null, submittedGuess: null, submissionState: 'submitting',
-            loading: false, error: false, epoch: 0, scheduled: false, gone: false };
+            loading: false, error: false, epoch: 0, scheduled: false, gone: false,
+            scopeEventId: null, scopeClient: null };
     },
     computed: {
+        activeRound() {
+            return this.scopeEventId === this.eventId && this.scopeClient === this.roundClient ? this.round : null;
+        },
+        authorizedReveal() {
+            return this.phase === 'reveal' && this.activeRound && this.reveal &&
+                this.reveal.roundId === this.activeRound.id ? this.reveal : null;
+        },
         timingExpired() {
             return !!this.timing && Number.isSafeInteger(this.nowMs) && this.timing.deadlineMs <= this.nowMs;
         },
@@ -47,7 +56,7 @@ export default {
     },
     watch: {
         eventId() { this.observeTiming(this.roundClient, this.eventId, this.phase === 'guessing'); this.schedule(); },
-        phase(value) { this.observeTiming(this.roundClient, this.eventId, value === 'guessing'); this.schedule(); },
+        phase(value) { if (value !== 'reveal') this.reveal = null; this.observeTiming(this.roundClient, this.eventId, value === 'guessing'); this.schedule(); },
         roundClient() { this.observeTiming(this.roundClient, this.eventId, this.phase === 'guessing'); this.schedule(); },
     },
     mounted() { this.refresh(); },
@@ -66,15 +75,34 @@ export default {
             const phase = this.phase;
             this.observeTiming(client, eventId, phase === 'guessing');
             const current = () => !this.gone && epoch === this.epoch && client === this.roundClient && eventId === this.eventId && phase === this.phase;
+            if (this.scopeEventId !== eventId || this.scopeClient !== client) {
+                this.round = null;
+                this.reveal = null;
+                this.submittedGuess = null;
+                this.scopeEventId = eventId;
+                this.scopeClient = client;
+            }
             this.loading = true;
             this.error = false;
             this.submissionState = 'submitting';
             if (phase === 'reveal') {
                 try {
-                    const reveal = await client.getReveal(eventId);
+                    const [result, ownGuess] = await Promise.allSettled([
+                        client.getReveal(eventId), client.getOwnGuess(eventId, 'r1'),
+                    ]);
                     if (!current()) return;
-                    if (!reveal) throw new Error('Reveal unavailable');
+                    const reveal = result.status === 'fulfilled' ? result.value : null;
+                    if (!reveal || typeof reveal.roundId !== 'string' || !reveal.roundId ||
+                        (this.round && reveal.roundId !== this.round.id)) throw new Error('Reveal unavailable');
+                    this.round = this.round || { id: reveal.roundId };
                     this.reveal = reveal;
+                    if (ownGuess.status === 'fulfilled') {
+                        this.submittedGuess = ownGuess.value;
+                        this.submissionState = ownGuess.value ? 'accepted' : 'idle';
+                    } else {
+                        this.error = true;
+                        this.submissionState = this.submittedGuess ? 'accepted' : 'error';
+                    }
                 } catch {
                     if (current()) this.error = true;
                 } finally {
@@ -98,7 +126,7 @@ export default {
         async submit(payload) {
             if (this.loading || this.phase !== 'guessing' || !['idle', 'error'].includes(this.submissionState) ||
                 !this.timingConnected || !this.timingKnown || !Number.isSafeInteger(this.nowMs) || this.timingExpired ||
-                !this.round || !payload || payload.roundId !== this.round.id) return;
+                !this.activeRound || !payload || payload.roundId !== this.activeRound.id) return;
             const epoch = this.epoch;
             const client = this.roundClient;
             const eventId = this.eventId;
