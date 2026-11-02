@@ -1,5 +1,7 @@
 import { mount } from '@vue/test-utils';
 import EventGuestLobby from '@/pages/event/EventGuestLobby.vue';
+import EventGuestSession from '@/pages/event/EventGuestSession.vue';
+import EventGuestRound from '@/pages/event/EventGuestRound.vue';
 
 const deferred = () => {
     let resolve;
@@ -231,5 +233,78 @@ describe('EventGuestLobby', () => {
         joins[0].deferred.resolve({ status: 'rejoined' });
         await Promise.resolve();
         expect(subscriptions[0].dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('dispatches validated v2 ready state to the injected session client without using the v1 round', async () => {
+        const sessionClient = {};
+        const wrapper = mount(EventGuestLobby, {
+            propsData: { eventId: 'party', lobbyClient: client, roundClient: {}, sessionClient },
+            stubs: { EventGuestSession: true, EventGuestRound: true },
+        });
+        const projection = { formatVersion: 2, title: 'Party', phase: 'ready', roundId: 'r02', revision: 4,
+            roundCount: 2, lastRevealedRoundId: 'r01', participants: [] };
+        subscriptions[0].onChange(projection);
+        await finishProbe(wrapper, { status: 'rejoined' });
+        expect(wrapper.text()).toContain('Wait for the host');
+        expect(wrapper.findComponent(EventGuestSession).props()).toMatchObject({
+            sessionClient, state: { phase: 'ready', roundId: 'r02', revision: 4, roundCount: 2, lastRevealedRoundId: 'r01' },
+        });
+        expect(wrapper.findComponent(EventGuestRound).exists()).toBe(false);
+        expect(client.join).toHaveBeenCalledTimes(1);
+        subscriptions[0].onChange({ ...projection, phase: 'guessing', revision: 5 });
+        await wrapper.vm.$nextTick();
+        expect(wrapper.findComponent(EventGuestSession).props('state').roundId).toBe('r02');
+        expect(client.join).toHaveBeenCalledTimes(1);
+        wrapper.destroy();
+    });
+
+    it.each([
+        { roundId: 'r1' }, { revision: 9 }, { roundCount: 1 }, { lastRevealedRoundId: 'r02' },
+        { participants: 'private-roster' }, { participants: [null] },
+    ])('fails closed on malformed v2 projection %s', async invalid => {
+        const wrapper = mount(EventGuestLobby, {
+            propsData: { eventId: 'party', lobbyClient: client, roundClient: {}, sessionClient: {} },
+            stubs: { EventGuestSession: true, EventGuestRound: true },
+        });
+        await finishProbe(wrapper, { status: 'rejoined' });
+        subscriptions[0].onChange({ formatVersion: 2, title: 'Party', phase: 'guessing', roundId: 'r02', revision: 5,
+            roundCount: 2, lastRevealedRoundId: 'r01', participants: [], ...invalid });
+        await wrapper.vm.$nextTick();
+        expect(wrapper.text()).toContain('Event status is unavailable');
+        expect(wrapper.findComponent(EventGuestSession).exists()).toBe(false);
+        expect(wrapper.findComponent(EventGuestRound).exists()).toBe(false);
+        wrapper.destroy();
+    });
+
+    it('keeps complete state and final round identity, ignores an older revision and removes it on connection loss', async () => {
+        const wrapper = mount(EventGuestLobby, {
+            propsData: { eventId: 'party', lobbyClient: client, sessionClient: {} },
+            stubs: { EventGuestSession: true },
+        });
+        await finishProbe(wrapper, { status: 'rejoined' });
+        const projection = { formatVersion: 2, title: 'Party', phase: 'complete', roundId: 'r02', revision: 8,
+            roundCount: 2, lastRevealedRoundId: 'r02', participants: [] };
+        subscriptions[0].onChange(projection);
+        await wrapper.vm.$nextTick();
+        expect(wrapper.findComponent(EventGuestSession).props('state')).toMatchObject({ phase: 'complete', roundId: 'r02', revision: 8 });
+        subscriptions[0].onChange({ ...projection, phase: 'guessing', revision: 5, lastRevealedRoundId: 'r01' });
+        await wrapper.vm.$nextTick();
+        expect(wrapper.findComponent(EventGuestSession).props('state').phase).toBe('complete');
+        subscriptions[0].onError(failure('unavailable'));
+        await wrapper.vm.$nextTick();
+        expect(wrapper.findComponent(EventGuestSession).exists()).toBe(false);
+        wrapper.destroy();
+    });
+
+    it('preserves v1 round dispatch when an optional session client is supplied', async () => {
+        const wrapper = mount(EventGuestLobby, {
+            propsData: { eventId: 'party', lobbyClient: client, roundClient: {}, sessionClient: {}, mapsLoader: () => Promise.resolve({}) },
+            stubs: { EventGuestSession: true, EventGuestRound: true },
+        });
+        subscriptions[0].onChange({ title: 'Legacy', phase: 'guessing', participants: [] });
+        await finishProbe(wrapper, { status: 'rejoined' });
+        expect(wrapper.findComponent(EventGuestRound).exists()).toBe(true);
+        expect(wrapper.findComponent(EventGuestSession).exists()).toBe(false);
+        wrapper.destroy();
     });
 });

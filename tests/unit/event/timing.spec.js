@@ -20,3 +20,13 @@ test('countdown treats the exact deadline as expired and preserves untimed state
     expect(validTiming({ ...timing, roundId: 'r2' })).toBe(false);
     expect(() => remainingMs({ deadlineMs: 10 }, 100000)).toThrow('invalid-timing');
 });
+
+
+test('multi-round timing validates only its explicitly selected scope', () => {
+    const timing = { roundId: 'r20', deadlineMs: 160000 };
+    expect(validTiming(timing)).toBe(false);
+    expect(validTiming(timing, 'r20')).toBe(true);
+    expect(validTiming(timing, 'r19')).toBe(false);
+    expect(validTiming({ ...timing, roundId: 'r21' }, 'r21')).toBe(false);
+    expect(remainingMs(timing, 150000, 'r20')).toBe(10000);
+});

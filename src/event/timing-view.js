@@ -14,6 +14,7 @@ export default {
             timingEpoch: 0,
             timingClientIdentity: null,
             timingEventIdentity: null,
+            timingRoundIdentity: null,
         };
     },
     computed: {
@@ -43,10 +44,11 @@ export default {
             }
             this.timingClientIdentity = null;
             this.timingEventIdentity = null;
+            this.timingRoundIdentity = null;
             this.clearTimingSnapshot();
         },
-        observeTiming(client, eventId, enabled = true) {
-            if (enabled && this.timingClientIdentity === client && this.timingEventIdentity === eventId &&
+        observeTiming(client, eventId, enabled = true, roundId = 'r1') {
+            if (enabled && this.timingClientIdentity === client && this.timingEventIdentity === eventId && this.timingRoundIdentity === roundId &&
                 (this.timingDisposer || this.timingInterval !== null)) return;
             this.stopTimingView();
             if (!enabled || !client || typeof client.subscribeTiming !== 'function') return;
@@ -54,6 +56,7 @@ export default {
             const epoch = this.timingEpoch;
             this.timingClientIdentity = client;
             this.timingEventIdentity = eventId;
+            this.timingRoundIdentity = roundId;
             let cancelled = false;
             let returnedDisposer = null;
             let disposed = false;
@@ -64,7 +67,7 @@ export default {
                 }
             };
             const current = () => !cancelled && this.timingEpoch === epoch &&
-                this.timingClientIdentity === client && this.timingEventIdentity === eventId;
+                this.timingClientIdentity === client && this.timingEventIdentity === eventId && this.timingRoundIdentity === roundId;
             const cancel = () => {
                 cancelled = true;
                 try { disposeOnce(); } catch (error) { /* cleanup is best effort */ }
@@ -72,7 +75,7 @@ export default {
             const onChange = snapshot => {
                 if (!current()) return;
                 if (!snapshot || typeof snapshot !== 'object' || typeof snapshot.connected !== 'boolean' ||
-                    !(snapshot.timing === null || validTiming(snapshot.timing)) ||
+                    !(snapshot.timing === null || validTiming(snapshot.timing, roundId)) ||
                     !(snapshot.offsetMs === null || Number.isSafeInteger(snapshot.offsetMs))) {
                     this.clearTimingSnapshot();
                     return;
@@ -92,6 +95,7 @@ export default {
                 this.timingInterval = null;
                 this.timingClientIdentity = null;
                 this.timingEventIdentity = null;
+                this.timingRoundIdentity = null;
                 this.timingEpoch += 1;
                 try { disposeOnce(); } catch (error) { /* cleanup is best effort */ }
                 if (this.timingDisposer === cancel) this.timingDisposer = null;
@@ -106,7 +110,8 @@ export default {
                 }
             }, 500);
             try {
-                returnedDisposer = client.subscribeTiming(eventId, onChange, onError);
+                returnedDisposer = roundId === 'r1' ? client.subscribeTiming(eventId, onChange, onError) :
+                    client.subscribeTiming(eventId, roundId, onChange, onError);
                 if (cancelled) disposeOnce();
             } catch (error) {
                 if (current()) {
@@ -116,6 +121,7 @@ export default {
                     this.timingInterval = null;
                     this.timingClientIdentity = null;
                     this.timingEventIdentity = null;
+                    this.timingRoundIdentity = null;
                     this.timingEpoch += 1;
                     try { disposeOnce(); } catch (disposeError) { /* cleanup is best effort */ }
                     if (this.timingDisposer === cancel) this.timingDisposer = null;

@@ -46,4 +46,15 @@ describe('EventTimingControls', () => {
         expect(wrapper.emitted('retry')).toHaveLength(1);
         wrapper.destroy();
     });
+    it('accepts scoped timing and resets the action latch when rounds change', async () => {
+        const wrapper = create({ roundId: 'r19', timing: { roundId: 'r19', deadlineMs: 62000 } });
+        await wrapper.find('button').trigger('click');
+        expect(wrapper.emitted('request-duration')).toHaveLength(1);
+        await wrapper.setProps({ roundId: 'r20', timing: { roundId: 'r20', deadlineMs: 62000 } });
+        expect(wrapper.find('button').element.disabled).toBe(false);
+        await wrapper.find('button').trigger('click');
+        expect(wrapper.emitted('request-duration')).toHaveLength(2);
+        wrapper.destroy();
+    });
+
 });
