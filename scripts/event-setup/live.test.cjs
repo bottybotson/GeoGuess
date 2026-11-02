@@ -10,6 +10,7 @@ const { LIVE_PROJECT, LIVE_DATABASE, assertLiveTarget, readServiceAccount, admin
 const target = { projectId: LIVE_PROJECT, databaseUrl: LIVE_DATABASE, eventId: 'synthetic-live-adapter-test' };
 const confirmation = { projectId: LIVE_PROJECT, databaseUrl: LIVE_DATABASE };
 const input = () => ({ ...target, event: { hostUid: 'host-a', public: { title: 'Synthetic operator test', phase: 'lobby' }, private: { round: { id: 'r1', panoramaId: 'fictional-pano', heading: 10, pitch: 0, answer: { lat: 10, lng: 20 }, difficulty: 2000 } } } });
+const v2Input = () => { const event = structuredClone(require('./example.multiround.synthetic.json').event); event.hostUid = 'host-a'; return { ...target, event }; };
 const account = () => ({ type: 'service_account', project_id: LIVE_PROJECT, client_email: `synthetic-test@${LIVE_PROJECT}.iam.gserviceaccount.com`, private_key: '-----BEGIN PRIVATE KEY-----\nsynthetic-test-only-not-a-real-key\n-----END PRIVATE KEY-----\n', token_uri: 'https://untrusted.invalid/token' });
 function keyfile(run) {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'geoguess-operator-key-'));
@@ -69,31 +70,33 @@ test('factory initializes only the bound named app, redacts SDK failures and clo
 });
 
 test('Admin adapter transactions never replace existing data even when SDK reruns callback after a concurrent winner', async () => {
-    let stored = null;
-    const services = {
-        auth: { getUser: async uid => ({ uid, disabled: false, providerData: [{ providerId: 'password' }] }) },
-        database: { ref(location) {
-            assert.equal(location, `events/${target.eventId}`);
-            return { async transaction(update, ignored, applyLocally) {
-                assert.equal(applyLocally, false);
-                update(null); // Initial cached-null invocation is not an acknowledgement.
-                await Promise.resolve();
-                const next = update(stored);
-                if (next === undefined) return { committed: false };
-                stored = next;
-                return { committed: true };
-            } };
-        } },
-    };
-    const adapter = adminAdapter(target, services, 'live');
-    const results = await Promise.allSettled(Array.from({ length: 5 }, () => provision(input(), target, { apply: true, adapter })));
-    assert.equal(results.filter(value => value.status === 'fulfilled').length, 1);
-    assert.equal(results.filter(value => value.status === 'rejected' && value.reason.code === 'event-exists').length, 4);
-    assert.equal(results.find(value => value.status === 'fulfilled').value.status, 'created-live-event');
-    assert.deepEqual(stored, input().event);
-    const replacement = input(); replacement.event.public.title = 'Replacement refused';
-    await assert.rejects(provision(replacement, target, { apply: true, adapter }), { code: 'event-exists' });
-    assert.deepEqual(stored, input().event);
+    for (const seed of [input, v2Input]) {
+        let stored = null;
+        const services = {
+            auth: { getUser: async uid => ({ uid, disabled: false, providerData: [{ providerId: 'password' }] }) },
+            database: { ref(location) {
+                assert.equal(location, `events/${target.eventId}`);
+                return { async transaction(update, ignored, applyLocally) {
+                    assert.equal(applyLocally, false);
+                    update(null); // Initial cached-null invocation is not an acknowledgement.
+                    await Promise.resolve();
+                    const next = update(stored);
+                    if (next === undefined) return { committed: false };
+                    stored = next;
+                    return { committed: true };
+                } };
+            } },
+        };
+        const adapter = adminAdapter(target, services, 'live');
+        const results = await Promise.allSettled(Array.from({ length: 5 }, () => provision(seed(), target, { apply: true, adapter })));
+        assert.equal(results.filter(value => value.status === 'fulfilled').length, 1);
+        assert.equal(results.filter(value => value.status === 'rejected' && value.reason.code === 'event-exists').length, 4);
+        assert.equal(results.find(value => value.status === 'fulfilled').value.status, 'created-live-event');
+        assert.deepEqual(stored, seed().event);
+        const replacement = seed(); replacement.event.public.title = 'Replacement refused';
+        await assert.rejects(provision(replacement, target, { apply: true, adapter }), { code: 'event-exists' });
+        assert.deepEqual(stored, seed().event);
+    }
 });
 
 test('CLI dry-run never loads credentials, live apply requires confirmations, and failures redact paths', () => keyfile(filename => {
@@ -112,33 +115,35 @@ test('CLI dry-run never loads credentials, live apply requires confirmations, an
 }));
 
 test('lookup timeout prevents creation; transaction timeout stays uncertain even if server later accepts it', async () => {
-    let writes = 0;
-    const blockedHost = adminAdapter(target, {
-        auth: { getUser: () => new Promise(() => {}) },
-        database: { ref() { writes++; assert.fail('No DB operation after an unconfirmed host lookup'); } },
-    }, 'live', 5);
-    await assert.rejects(provision(input(), target, { apply: true, adapter: blockedHost }), { code: 'host-lookup-failed' });
-    assert.equal(writes, 0);
-    let finish, offline = 0, stored = null;
-    const services = {
-        auth: { getUser: async uid => ({ uid, disabled: false, providerData: [{ providerId: 'password' }] }) },
-        database: {
-            goOffline() { offline++; },
-            ref() { return { transaction(update) {
-                return new Promise(resolve => { finish = () => { stored = update(stored); resolve({ committed: true }); }; });
-            } }; },
-        },
-    };
-    const uncertain = adminAdapter(target, services, 'live', 5);
-    await assert.rejects(provision(input(), target, { apply: true, adapter: uncertain }), error => error.code === 'create-unconfirmed' && error.message === 'create-unconfirmed');
-    assert.equal(offline, 1);
-    finish(); // Transport teardown is not proof that an already-sent server write was cancelled.
-    await Promise.resolve();
-    assert.deepEqual(stored, input().event);
-    const checkAgain = adminAdapter(target, {
-        auth: services.auth,
-        database: { ref() { return { async transaction(update) { assert.equal(update(stored), undefined); return { committed: false }; } }; } },
-    }, 'live');
-    await assert.rejects(provision(input(), target, { apply: true, adapter: checkAgain }), { code: 'event-exists' });
-    assert.deepEqual(stored, input().event);
+    for (const seed of [input, v2Input]) {
+        let writes = 0;
+        const blockedHost = adminAdapter(target, {
+            auth: { getUser: () => new Promise(() => {}) },
+            database: { ref() { writes++; assert.fail('No DB operation after an unconfirmed host lookup'); } },
+        }, 'live', 5);
+        await assert.rejects(provision(seed(), target, { apply: true, adapter: blockedHost }), { code: 'host-lookup-failed' });
+        assert.equal(writes, 0);
+        let finish, offline = 0, stored = null;
+        const services = {
+            auth: { getUser: async uid => ({ uid, disabled: false, providerData: [{ providerId: 'password' }] }) },
+            database: {
+                goOffline() { offline++; },
+                ref() { return { transaction(update) {
+                    return new Promise(resolve => { finish = () => { stored = update(stored); resolve({ committed: true }); }; });
+                } }; },
+            },
+        };
+        const uncertain = adminAdapter(target, services, 'live', 5);
+        await assert.rejects(provision(seed(), target, { apply: true, adapter: uncertain }), error => error.code === 'create-unconfirmed' && error.message === 'create-unconfirmed');
+        assert.equal(offline, 1);
+        finish(); // Transport teardown is not proof that an already-sent server write was cancelled.
+        await Promise.resolve();
+        assert.deepEqual(stored, seed().event);
+        const checkAgain = adminAdapter(target, {
+            auth: services.auth,
+            database: { ref() { return { async transaction(update) { assert.equal(update(stored), undefined); return { committed: false }; } }; } },
+        }, 'live');
+        await assert.rejects(provision(seed(), target, { apply: true, adapter: checkAgain }), { code: 'event-exists' });
+        assert.deepEqual(stored, seed().event);
+    }
 });

@@ -2,7 +2,7 @@
 'use strict';
 const fs = require('node:fs');
 const { provision, validate } = require('./core.cjs');
-const allowedErrors = new Set(['invalid-target', 'invalid-input', 'target-mismatch', 'invalid-event', 'invalid-round', 'emulator-target-required', 'live-target-required', 'credential-required', 'admin-unavailable', 'host-lookup-failed', 'invalid-host', 'event-exists', 'create-failed', 'create-unconfirmed']);
+const allowedErrors = new Set(['invalid-target', 'invalid-input', 'target-mismatch', 'invalid-event', 'invalid-round', 'invalid-rounds', 'emulator-target-required', 'live-target-required', 'credential-required', 'admin-unavailable', 'host-lookup-failed', 'invalid-host', 'event-exists', 'create-failed', 'create-unconfirmed']);
 async function main(args) {
     const values = {};
     for (let index = 0; index < args.length; index++) {

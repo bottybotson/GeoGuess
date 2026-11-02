@@ -1,8 +1,9 @@
-# Guarded one-round seed tool — issue #37
+# Guarded event seed tool — issues #37 and #62
 
-This operator tool validates a fresh single-round seed without touching Firebase
-by default. It is outside frontend assets. Live apply is a separate, explicit
-operator action restricted to the supplied rehearsal project; it has not been
+This operator tool validates fresh v1 single-round and v2 ordered-round seeds
+without touching Firebase by default. It is outside frontend assets. Live apply
+is a separate, explicit operator action restricted to the supplied rehearsal
+project; it has not been
 executed against live services as part of this work.
 It does not deploy rules, enable providers, create accounts, reset/delete events,
 validate Google imagery, or configure hosting. The project's real browser
@@ -17,18 +18,32 @@ node scripts/event-setup/cli.cjs \
   --project demo-geoguess-admission \
   --database-url https://demo-geoguess-admission.firebaseio.com \
   --event-id synthetic-rehearsal-a
-node --test scripts/event-setup/setup.test.cjs
+node scripts/event-setup/cli.cjs \
+  --input scripts/event-setup/example.multiround.synthetic.json \
+  --project demo-geoguess-admission \
+  --database-url https://demo-geoguess-admission.firebaseio.com \
+  --event-id synthetic-multiround-a
+node --test scripts/event-setup/setup.test.cjs scripts/event-setup/live.test.cjs
 ```
 
-The example intentionally has a fictional panorama and a nonexistent organizer.
+The synthetic examples use fictional panoramas and a nonexistent organizer.
 A successful dry-run reports `identityVerified:false` and
 `panoramaVerified:false`; it only establishes schema/target validity. It loads
 no provider adapter and makes no network calls. All four explicit input/target
 arguments are required. Target values must agree with the JSON file, including
 the region-specific database URL. Extra event fields, existing public results,
 non-lobby phase, malformed IDs, obvious placeholder fields and invalid coordinates
-or camera settings are refused. The event schema is the current `r1` contract;
-multiround configuration is not implemented here.
+or camera settings are refused. Both the original v1 `r1` schema and reviewed
+v2 ordered-round seed schema are accepted. V1 retains
+`public:{title,phase:"lobby"}` and `private.round`. V2 requires
+`public:{title,formatVersion:2,roundCount,state}` with initial state
+`{phase:"lobby",roundId:"r01",revision:0}`, plus only `private.rounds.r01`
+through the configured final round. Each private setup has exact
+`{id,panoramaId,heading,pitch,answer:{lat,lng},difficulty}` fields plus canonical
+`previousRoundId`/`nextRoundId` links omitted at the endpoints. V2 allows 1–20
+rounds. The synthetic v2 example is
+still a dry-run only; this validator does not imply that the runtime UI or a
+real multi-round event is playable.
 
 Keep actual private seed files outside the checkout or in an appropriately
 ignored private directory. Never commit real answers, personal venue data,
@@ -66,6 +81,9 @@ compare-and-set transaction: a concurrent creator changes the ETag and the
 server returns 412, so no prior event is overwritten. It does not perform an
 unconditional read-then-set or retry with a newer ETag. `Bearer owner` is an
 emulator-only authorization token, not a production credential.
+Lost PUT acknowledgements and server errors report `create-unconfirmed`; they
+cannot establish whether the conditional write committed. There is no automatic
+retry after that outcome.
 
 Example inside a running, correctly guarded emulator environment:
 
@@ -115,7 +133,7 @@ env XDG_CONFIG_HOME=/workspace/.geoguess-emulator-tools/config \
   /workspace/.geoguess-emulator-tools/node_modules/firebase-tools/lib/bin/firebase.js \
   emulators:exec --only auth,database --project demo-geoguess-admission \
   --config /workspace/GeoGuess/tests/integration/event-round/firebase.json \
-  '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node --test /workspace/GeoGuess/scripts/event-setup/emulator.test.cjs'
+  '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node --test --test-concurrency=1 /workspace/GeoGuess/scripts/event-setup/emulator.test.cjs /workspace/GeoGuess/scripts/event-setup/admin-emulator.test.cjs'
 ```
 
 Independent security review is required before proposing this tool for merge.
@@ -209,8 +227,10 @@ services; no real credentials or live network calls occur. A separate guarded
 `admin-emulator.test.cjs` uses the actual isolated Admin SDK only with fixed demo
 project and loopback Auth/Database services, checking actual user lookup,
 concurrent transaction creation, disabled-host rejection and overwrite refusal.
-It can be run with the emulator command above by replacing `emulator.test.cjs`
-with `admin-emulator.test.cjs`. It never loads the live credential factory.
+The emulator command above runs both fixtures sequentially. The Admin fixture
+also uses the frontend's installed Babel dependencies to load the actual session
+client and validate provisioned v2 state and private setups. It never loads the
+live credential factory.
 
 Verified 2026-10-29 for issue #51: **15 pure tests pass**, independently reproduced
 with pinned Node 20 during security review. **One actual Admin SDK emulator
@@ -222,3 +242,29 @@ loopback guards, inside its own process; normal CLI TLS/proxy verification stays
 enabled. An initial inherited-proxy attempt did not complete and was treated as
 a failed run; the corrected run is the evidence above. Independent security
 review found no blockers. No live credential or live write was exercised.
+
+## V2 provisioning evidence — issue #62
+
+Verified 2026-11-02: **20 pure Node tests pass** with pinned Node 20.14.0. Both
+synthetic CLI dry-runs succeed without credentials. Coverage includes exact
+1/2/20-round schemas, malformed versions/counts/state/links, mixed v1/v2 and
+public future data, source/target mutation during asynchronous lookup, host and
+credential binding, concurrent creators and bounded uncertain writes. V1 keeps
+its existing schema and JSON output normalization.
+
+With the documented Node 24 runner, **both actual emulator fixtures pass**:
+v1 and v2 with 1, 2 and 20 rounds through each adapter (eight subscenarios;
+10 reported tests including their parents), exit 0 with clean shutdown. Each
+five-creator race yields exactly one winner; stored seeds match exactly and
+replacement is refused. The Admin fixture additionally reads all 23 v2 private
+round setups and initial state through `src/event/session.js`, and confirms
+that clues/reveals are absent at creation. These privileged fixture reads verify
+schema compatibility; public access-rule enforcement is covered separately by
+the runtime/rules proofs.
+
+Independent review of the original v2 changes found and resolved missing CLI
+reporting for invalid round collections and a v1 JSON normalization regression.
+It also made conditional emulator PUT uncertainty explicit for lost responses
+and server errors; neither adapter silently retries an uncertain write. No
+unresolved provisioning review finding remains. No real credentials, live
+provider mutation, deployment or panorama availability check was exercised.

@@ -1,0 +1,36 @@
+{
+  "projectId": "demo-geoguess-admission",
+  "databaseUrl": "https://demo-geoguess-admission.firebaseio.com",
+  "eventId": "synthetic-multiround-a",
+  "event": {
+    "hostUid": "synthetic-host-not-an-account",
+    "public": {
+      "title": "Synthetic ordered-round rehearsal",
+      "formatVersion": 2,
+      "roundCount": 2,
+      "state": { "phase": "lobby", "roundId": "r01", "revision": 0 }
+    },
+    "private": {
+      "rounds": {
+        "r01": {
+          "id": "r01",
+          "panoramaId": "fictional-panorama-one-not-for-live-use",
+          "heading": 37,
+          "pitch": -4,
+          "answer": { "lat": 10, "lng": 20 },
+          "difficulty": 2000,
+          "nextRoundId": "r02"
+        },
+        "r02": {
+          "id": "r02",
+          "panoramaId": "fictional-panorama-two-not-for-live-use",
+          "heading": 142,
+          "pitch": 3,
+          "answer": { "lat": 11, "lng": 21 },
+          "difficulty": 2400,
+          "previousRoundId": "r01"
+        }
+      }
+    }
+  }
+}
