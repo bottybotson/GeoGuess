@@ -1,6 +1,6 @@
 <template>
     <main class="event-round-results" aria-live="polite">
-        <h1>Round results</h1>
+        <h1>{{ final ? 'Final standings' : cumulative ? 'Overall standings' : 'Round results' }}</h1>
         <section v-if="validReveal" class="event-round-results__answer" aria-label="Correct location">
             <h2>Correct location</h2>
             <details>
@@ -15,8 +15,9 @@
             <ol v-else>
                 <li v-for="result in sortedResults" :key="result.uid" :class="{ 'is-current': result.uid === currentUid }">
                     <span class="event-round-results__nickname">{{ result.nickname }}</span>
+                    <span v-if="cumulative" class="event-round-results__total">{{ result.totalPoints === null ? 'Total unavailable' : `${result.totalPoints} total points` }}</span>
                     <span v-if="!result.answered" class="event-round-results__no-answer">No answer · 0 points</span>
-                    <span v-else class="event-round-results__points">{{ result.points }} points</span>
+                    <span v-else class="event-round-results__points">{{ result.points }} {{ cumulative ? 'points this round' : 'points' }}</span>
                     <span v-if="result.answered && result.distance !== null" class="event-round-results__distance">{{ result.distance }} km away</span>
                 </li>
             </ol>
@@ -35,6 +36,8 @@ export default {
     props: {
         reveal: { type: Object, required: true },
         currentUid: { type: String, default: '' },
+        cumulative: { type: Boolean, default: false },
+        final: { type: Boolean, default: false },
     },
     computed: {
         validReveal() {
@@ -53,11 +56,16 @@ export default {
                     nickname: typeof item.nickname === 'string' ? item.nickname : 'Guest',
                     answered,
                     points: answered && Number.isFinite(item.points) && item.points >= 0 ? item.points : 0,
+                    totalPoints: Number.isInteger(item.totalPoints) && item.totalPoints >= 0 && item.totalPoints <= 100000
+                        ? item.totalPoints : null,
                     distance: answered && Number.isFinite(item.distance) && item.distance >= 0
                         ? (item.distance / 1000).toFixed(1)
                         : null,
                 };
-            }).filter(Boolean).sort((a, b) => b.points - a.points || (a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0));
+            }).filter(Boolean).sort((a, b) => {
+                const score = item => this.cumulative ? (item.totalPoints === null ? -1 : item.totalPoints) : item.points;
+                return score(b) - score(a) || (a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0);
+            });
         },
     },
 };
@@ -73,5 +81,6 @@ export default {
 .event-round-results li { padding: 0.5rem; border-bottom: 1px solid #8a969f; }
 .event-round-results li.is-current { border: 3px solid #145b9e; border-radius: 0.4rem; }
 .event-round-results__nickname { font-weight: 700; }
+.event-round-results__total { display: inline-block; margin-left: 1rem; font-weight: 700; }
 .event-round-results__points, .event-round-results__no-answer, .event-round-results__distance { display: inline-block; margin-left: 1rem; }
 </style>

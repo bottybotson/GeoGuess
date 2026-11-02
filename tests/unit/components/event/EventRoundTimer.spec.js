@@ -31,4 +31,12 @@ describe('EventRoundTimer', () => {
         expect(wrapper.text()).toContain('Waiting for connection');
         wrapper.destroy();
     });
+    it('shows an explicitly scoped twentieth-round timer and rejects stale timing', async () => {
+        const wrapper = create({ roundId: 'r20', timing: { roundId: 'r20', deadlineMs: 62000 } });
+        expect(wrapper.text()).toContain('Time remaining: 01:01');
+        await wrapper.setProps({ roundId: 'r19' });
+        expect(wrapper.text()).toContain('Waiting for connection');
+        wrapper.destroy();
+    });
+
 });

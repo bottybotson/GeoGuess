@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import EventHost from '@/pages/event/EventHost.vue';
+import EventHost from '@/pages/event/EventLegacyHost.vue';
 
 const deferred = () => {
     let resolve;

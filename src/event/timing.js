@@ -5,10 +5,10 @@ export function validDeadline(value) {
     return Number.isSafeInteger(value) && value > 0;
 }
 
-export function validTiming(value) {
+export function validTiming(value, roundId = 'r1') {
     return value !== null && typeof value === 'object' && !Array.isArray(value) &&
         Object.keys(value).length === 2 && Object.prototype.hasOwnProperty.call(value, 'roundId') &&
-        Object.prototype.hasOwnProperty.call(value, 'deadlineMs') && value.roundId === 'r1' && validDeadline(value.deadlineMs);
+        Object.prototype.hasOwnProperty.call(value, 'deadlineMs') && value.roundId === roundId && (roundId === 'r1' || /^r(0[1-9]|1[0-9]|20)$/.test(roundId)) && validDeadline(value.deadlineMs);
 }
 
 /** Compute once per user action; preserve the returned absolute target on retry. */
@@ -26,9 +26,9 @@ export function deadlineAfter(serverNowMs, durationMs, currentDeadlineMs = null)
 }
 
 /** Zero is expired; null is untimed. Server Rules independently enforce expiry. */
-export function remainingMs(timing, serverNowMs) {
+export function remainingMs(timing, serverNowMs, roundId = 'r1') {
     if (timing === null) return null;
-    if (!validTiming(timing) || !validDeadline(serverNowMs)) {
+    if (!validTiming(timing, roundId) || !validDeadline(serverNowMs)) {
         throw Object.assign(new Error('invalid-timing'), { code: 'invalid-timing' });
     }
     return Math.max(0, timing.deadlineMs - serverNowMs);

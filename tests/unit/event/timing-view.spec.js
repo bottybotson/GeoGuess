@@ -73,4 +73,28 @@ describe('shared timing view', () => {
         expect(wrapper.vm.nowMs).toBe(null);
         wrapper.destroy();
     });
+    it('replaces round subscriptions and rejects old or mismatched round timing', () => {
+        const listeners = [];
+        const client = { subscribeTiming: jest.fn((eventId, roundId, onChange) => {
+            const listener = { roundId, onChange, dispose: jest.fn() };
+            listeners.push(listener);
+            return listener.dispose;
+        }) };
+        const wrapper = fixture();
+        wrapper.vm.observeTiming(client, 'party', true, 'r01');
+        listeners[0].onChange({ timing: { roundId: 'r01', deadlineMs: 200000 }, connected: true, offsetMs: 0 });
+        expect(wrapper.vm.timingConnected).toBe(true);
+        wrapper.vm.observeTiming(client, 'party', true, 'r02');
+        expect(listeners[0].dispose).toHaveBeenCalledTimes(1);
+        expect(wrapper.vm.timingConnected).toBe(false);
+        listeners[0].onChange({ timing: null, connected: true, offsetMs: 0 });
+        expect(wrapper.vm.timingConnected).toBe(false);
+        listeners[1].onChange({ timing: { roundId: 'r01', deadlineMs: 200000 }, connected: true, offsetMs: 0 });
+        expect(wrapper.vm.timingConnected).toBe(false);
+        listeners[1].onChange({ timing: { roundId: 'r02', deadlineMs: 200000 }, connected: true, offsetMs: 0 });
+        expect(wrapper.vm.timingConnected).toBe(true);
+        wrapper.destroy();
+        expect(listeners[1].dispose).toHaveBeenCalledTimes(1);
+    });
+
 });

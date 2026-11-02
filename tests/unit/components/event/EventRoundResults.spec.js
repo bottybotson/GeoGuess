@@ -13,6 +13,36 @@ const reveal = {
 };
 
 describe('EventRoundResults', () => {
+    it('ranks cumulative points and preserves previous points for an unanswered final round', () => {
+        const wrapper = mount(EventRoundResults, { propsData: {
+            cumulative: true, final: true,
+            reveal: { ...reveal, results: {
+                first: { nickname: 'Earlier leader', answered: false, points: 0, totalPoints: 8000 },
+                second: { nickname: 'Round winner', answered: true, points: 5000, totalPoints: 6000, distance: 0 },
+            } },
+        } });
+        expect(wrapper.find('h1').text()).toBe('Final standings');
+        const rows = wrapper.findAll('li');
+        expect(rows.at(0).text()).toContain('Earlier leader');
+        expect(rows.at(0).text()).toContain('8000 total points');
+        expect(rows.at(0).text()).toContain('No answer · 0 points');
+        expect(rows.at(1).text()).toContain('5000 points this round');
+        wrapper.destroy();
+    });
+
+    it('does not invent cumulative totals when they are absent or invalid', () => {
+        const wrapper = mount(EventRoundResults, { propsData: {
+            cumulative: true,
+            reveal: { ...reveal, results: {
+                invalid: { nickname: 'Unknown total', answered: true, points: 5000, totalPoints: -1 },
+                valid: { nickname: 'Known total', answered: false, points: 0, totalPoints: 0 },
+            } },
+        } });
+        expect(wrapper.findAll('li').at(0).text()).toContain('Known total');
+        expect(wrapper.findAll('li').at(1).text()).toContain('Total unavailable');
+        wrapper.destroy();
+    });
+
     it('shows the revealed location and sorts points descending with UID tie breaks', () => {
         const wrapper = mount(EventRoundResults, { propsData: { reveal } });
         expect(wrapper.text()).toContain('51.5');

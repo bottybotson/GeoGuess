@@ -1,4 +1,5 @@
 import { MAX_GUESTS } from './admission';
+import { validSessionState } from './version';
 
 const PHASES = new Set(['lobby', 'guessing', 'closed', 'reveal', 'complete']);
 const SLOTS = Array.from({ length: MAX_GUESTS }, (_, index) => `s${String(index + 1).padStart(2, '0')}`);
@@ -56,12 +57,14 @@ function availableSlot(value) {
     return SLOTS.find(slot => !hasOwn(value, slot));
 }
 
-function projection(values) {
+function projection(values, version) {
     const title = typeof values.title === 'string' ? values.title : 'Birthday GeoGuess';
-    const phase = PHASES.has(values.phase) ? values.phase : 'unavailable';
+    const state = version === 2 && validSessionState(values.state, values.roundCount) ? values.state : null;
+    const phase = version === 2 ? (state ? state.phase : 'unavailable') : PHASES.has(values.phase) ? values.phase : 'unavailable';
+    const metadata = version === 2 && state ? { formatVersion: 2, ...state, roundCount: values.roundCount } : {};
     const roster = values.participants;
     const unavailable = () => ({ title, phase: 'unavailable', participants: [] });
-    if (roster === null) return { title, phase, participants: [] };
+    if (roster === null) return { title, ...metadata, phase, participants: [] };
     if (!isRecord(roster) || Object.keys(roster).length > MAX_GUESTS) return unavailable();
     const slots = new Set();
     const participants = [];
@@ -71,11 +74,12 @@ function projection(values) {
         slots.add(participant.slot);
         participants.push({ id, nickname: participant.nickname });
     }
-    return { title, phase, participants };
+    return { title, ...metadata, phase, participants };
 }
 
 /** Firebase 8 compat dependencies are injected; this module has no provider side effects. */
-export function createLobbyClient(database, identity) {
+export function createLobbyClient(database, identity, version = 1) {
+    if (version !== 1 && version !== 2) throw failure('unsupported-format');
     const inFlight = new Map();
 
     function join(eventId, nickname) {
@@ -130,7 +134,12 @@ export function createLobbyClient(database, identity) {
             for (let claims = 0; claims <= 51; claims += 1) {
                 const existing = await existingMember();
                 if (existing) return existing;
-                if (await read(`${base}/phase`) !== 'lobby') return { status: 'started' };
+                if (version === 2) {
+                    const count = await read(`${base}/roundCount`);
+                    const state = await read(`${base}/state`);
+                    if (!validSessionState(state, count)) throw failure('unavailable');
+                    if (state.phase !== 'lobby' || state.roundId !== 'r01' || state.revision !== 0) return { status: 'started' };
+                } else if (await read(`${base}/phase`) !== 'lobby') return { status: 'started' };
                 const name = typeof nickname === 'string' ? nickname.trim() : nickname;
                 if (!isNickname(name)) throw failure('invalid-nickname');
                 const slot = availableSlot(await read(`${base}/slots`));
@@ -193,7 +202,8 @@ export function createLobbyClient(database, identity) {
             dispose();
             if (typeof onError === 'function') onError(error);
         };
-        for (const leaf of ['title', 'phase', 'participants']) {
+        const leaves = version === 2 ? ['title', 'state', 'roundCount', 'participants'] : ['title', 'phase', 'participants'];
+        for (const leaf of leaves) {
             if (disposed) break;
             let listener;
             try {
@@ -202,7 +212,7 @@ export function createLobbyClient(database, identity) {
                     if (disposed) return;
                     values[leaf] = snapshot.val();
                     ready.add(leaf);
-                    if (ready.size === 3) onChange(projection(values));
+                    if (ready.size === leaves.length) onChange(projection(values, version));
                 };
                 listener = { ref, handler };
                 listeners.push(listener);

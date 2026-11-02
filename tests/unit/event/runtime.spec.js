@@ -1,9 +1,9 @@
-import { createEventLobbyRuntime } from '@/event/runtime';
+import { createEventLobbyRuntime, createEventPresenterRuntime, createEventSessionRuntime } from '@/event/runtime';
 import { createGuestIdentity } from '@/event/identity';
-import { createLobbyClient } from '@/event/lobby';
+import { createVersionedLobbyClient, createVersionedSessionClient, createPresenterClient } from '@/event/facade';
 
 jest.mock('@/event/identity', () => ({ createGuestIdentity: jest.fn() }));
-jest.mock('@/event/lobby', () => ({ createLobbyClient: jest.fn() }));
+jest.mock('@/event/facade', () => ({ createVersionedLobbyClient: jest.fn(), createVersionedSessionClient: jest.fn(), createPresenterClient: jest.fn() }));
 
 function sdkFixture() {
     const calls = [];
@@ -25,7 +25,9 @@ function sdkFixture() {
 
 beforeEach(() => {
     jest.clearAllMocks();
-    createLobbyClient.mockImplementation((database, identity) => ({ database, identity }));
+    createVersionedLobbyClient.mockImplementation((database, identity) => ({ database, identity }));
+    createVersionedSessionClient.mockImplementation((database, identity) => ({ database, identity }));
+    createPresenterClient.mockImplementation(database => ({ database }));
     createGuestIdentity.mockReturnValue({ ensureGuest: jest.fn().mockResolvedValue({ uid: 'guest' }) });
 });
 
@@ -60,33 +62,62 @@ describe('event runtime isolation', () => {
         const f = sdkFixture();
         expect(() => createEventLobbyRuntime(f.sdk, { mode, hostname, emulators: true })).toThrow();
         expect(f.sdk.initializeApp).not.toHaveBeenCalled();
-        expect(createLobbyClient).not.toHaveBeenCalled();
+        expect(createVersionedLobbyClient).not.toHaveBeenCalled();
     });
 
-    it('pins demo project and endpoints before constructing a client', () => {
+    it('pins demo database and defers emulator Auth until deliberate joining', async () => {
         const f = sdkFixture();
-        createEventLobbyRuntime(f.sdk, { mode: 'development', hostname: '127.0.0.1', emulators: true });
+        const client = createEventLobbyRuntime(f.sdk, { mode: 'development', hostname: '127.0.0.1', emulators: true });
         expect(f.sdk.app).not.toHaveBeenCalled();
         expect(f.sdk.initializeApp.mock.calls[0][0].projectId).toBe('demo-geoguess-admission');
-        expect(f.auth.useEmulator).toHaveBeenCalledWith('http://127.0.0.1:9099', { disableWarnings: true });
+        expect(f.sdk.apps[0].auth).not.toHaveBeenCalled();
         expect(f.db.useEmulator).toHaveBeenCalledWith('127.0.0.1', 9009);
-        expect(f.calls.indexOf('auth-emulator')).toBeLessThan(f.calls.indexOf('database'));
         expect(createGuestIdentity).not.toHaveBeenCalled();
+        await client.identity.ensureGuest();
+        expect(f.auth.useEmulator).toHaveBeenCalledWith('http://127.0.0.1:9099', { disableWarnings: true });
+        expect(createGuestIdentity).toHaveBeenCalledTimes(1);
     });
 
     it('rejects a reused named app bound to a different project', () => {
         const f = sdkFixture();
         f.sdk.apps.push({ name: 'geoguess-event-guest', options: { projectId: 'wrong-project' } });
         expect(() => createEventLobbyRuntime(f.sdk)).toThrow('configuration mismatch');
-        expect(createLobbyClient).not.toHaveBeenCalled();
+        expect(createVersionedLobbyClient).not.toHaveBeenCalled();
     });
 
-    it('does not silently reuse an auth emulator at a different endpoint', () => {
+    it('does not silently reuse an auth emulator at a different endpoint during join', async () => {
         const f = sdkFixture();
         f.auth.emulatorConfig = { host: 'unexpected.example', port: 9099 };
-        expect(() => createEventLobbyRuntime(f.sdk, {
+        const client = createEventLobbyRuntime(f.sdk, {
             mode: 'development', hostname: 'localhost', emulators: true,
-        })).toThrow('Unexpected event auth emulator');
-        expect(f.db.useEmulator).not.toHaveBeenCalled();
+        });
+        await expect(client.identity.ensureGuest()).rejects.toThrow('Unexpected event auth emulator');
+        expect(createGuestIdentity).not.toHaveBeenCalled();
     });
+});
+
+
+test.each([false, true])('presenter does not request Auth or guest identity (emulators=%s)', emulators => {
+    const f = sdkFixture();
+    const presenter = createEventPresenterRuntime(f.sdk, { mode: 'development', hostname: 'localhost', emulators });
+    expect(presenter.database).toBe(f.db);
+    expect(f.sdk.apps[0].name).toBe(emulators ? 'geoguess-event-demo-presenter' : 'geoguess-event-presenter');
+    expect(f.sdk.apps[0].auth).not.toHaveBeenCalled();
+    expect(createGuestIdentity).not.toHaveBeenCalled();
+    expect(createVersionedLobbyClient).not.toHaveBeenCalled();
+    expect(createPresenterClient).toHaveBeenCalledWith(f.db);
+});
+
+test('guest session uses the same stable guest identity lazily', async () => {
+    const f = sdkFixture();
+    createVersionedSessionClient.mockImplementation((database, identity) => ({
+        getOwnGuess: () => identity.ensureUser(), start: jest.fn(), getHostSetup: jest.fn(),
+    }));
+    const session = createEventSessionRuntime(f.sdk);
+    expect(f.sdk.apps[0].auth).not.toHaveBeenCalled();
+    await expect(session.getOwnGuess()).resolves.toEqual({ uid: 'guest' });
+    expect(createGuestIdentity).toHaveBeenCalledTimes(1);
+    expect(Object.keys(session).sort()).toEqual(['getClue', 'getOwnGuess', 'getReveal', 'getServerTime', 'getState', 'getTiming', 'submitGuess', 'subscribeState', 'subscribeTiming']);
+    expect(session.start).toBeUndefined();
+    expect(session.getHostSetup).toBeUndefined();
 });

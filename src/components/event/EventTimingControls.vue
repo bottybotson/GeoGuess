@@ -23,15 +23,13 @@
 </template>
 
 <script>
-function validTiming(timing) {
-    return !!timing && typeof timing === 'object' && timing.roundId === 'r1' &&
-        Number.isSafeInteger(timing.deadlineMs) && timing.deadlineMs > 0;
-}
+import { validTiming } from '@/event/timing';
 
 export default {
     name: 'EventTimingControls',
     props: {
         timing: { type: Object, default: null },
+        roundId: { type: String, default: 'r1' },
         nowMs: { type: Number, default: null },
         connected: { type: Boolean, default: false },
         busy: { type: Boolean, default: false },
@@ -44,11 +42,11 @@ export default {
     computed: {
         clockKnown() { return Number.isSafeInteger(this.nowMs) && this.nowMs > 0; },
         expired() {
-            return validTiming(this.timing) && this.clockKnown && this.timing.deadlineMs <= this.nowMs;
+            return validTiming(this.timing, this.roundId) && this.clockKnown && this.timing.deadlineMs <= this.nowMs;
         },
         canRequest() {
             return this.connected && this.clockKnown && !this.busy && !this.requestLatched &&
-                !this.retryAvailable && (this.timing === null || validTiming(this.timing));
+                !this.retryAvailable && (this.timing === null || validTiming(this.timing, this.roundId));
         },
         statusMessage() {
             if (this.error) return 'Timing update was not confirmed. You can retry the same update.';
@@ -59,6 +57,7 @@ export default {
         },
     },
     watch: {
+        roundId() { this.requestLatched = false; this.retryLatched = false; this.sawBusy = false; },
         busy(value) {
             if (value) this.sawBusy = true;
             else if (this.sawBusy) {

@@ -6,8 +6,12 @@
             <p class="event-guest-lobby__count">{{ guestCount }} guests in the lobby</p>
         </header>
 
+        <EventGuestSession
+            v-if="joinState === 'joined' && sessionClient && sessionState"
+            :event-id="eventId" :state="sessionState" :session-client="sessionClient" :maps-loader="mapsLoader"
+        />
         <EventGuestRound
-            v-if="joinState === 'joined' && roundClient && ['guessing', 'closed', 'reveal'].includes(phase)"
+            v-else-if="joinState === 'joined' && formatVersion === 1 && roundClient && ['guessing', 'closed', 'reveal'].includes(phase)"
             :event-id="eventId" :phase="phase" :round-client="roundClient" :maps-loader="mapsLoader"
         />
         <EventJoinForm v-else :state="joinState" @join="join" />
@@ -30,9 +34,12 @@
 <script>
 import EventJoinForm from '@/components/event/EventJoinForm.vue';
 import EventGuestRound from './EventGuestRound.vue';
+import EventGuestSession from './EventGuestSession.vue';
+import { validSessionState } from '@/event/version';
 
 const PHASES = {
     lobby: 'The lobby is open. The host will start the game.',
+    ready: 'The next round is ready. Wait for the host to start.',
     guessing: 'The game is in progress.',
     closed: 'Guessing is closed. The host will reveal the results.',
     reveal: 'The host is revealing the round.',
@@ -42,17 +49,20 @@ const PHASES = {
 export default {
     name: 'EventGuestLobby',
     inheritAttrs: false,
-    components: { EventJoinForm, EventGuestRound },
+    components: { EventJoinForm, EventGuestRound, EventGuestSession },
     props: {
         eventId: { type: String, required: true },
         lobbyClient: { type: Object, required: true },
         roundClient: { type: Object, default: null },
+        sessionClient: { type: Object, default: null },
         mapsLoader: { type: Function, default: null },
     },
     data() {
         return {
             title: 'Birthday GeoGuess',
             phase: 'unavailable',
+            formatVersion: null,
+            sessionState: null,
             guestCount: 0,
             joinState: 'joining',
             connectionError: false,
@@ -93,6 +103,9 @@ export default {
             // Invalidate callbacks and release the old listener at the prop
             // change boundary, before the coalesced reconnect runs.
             this.dispose();
+            this.sessionState = null;
+            this.formatVersion = null;
+            this.phase = 'unavailable';
             if (this.connectPending || this.destroyed) return;
             this.connectPending = true;
             this.$nextTick(() => {
@@ -110,6 +123,8 @@ export default {
             let subscriptionFailed = false;
             this.title = 'Birthday GeoGuess';
             this.phase = 'unavailable';
+            this.formatVersion = null;
+            this.sessionState = null;
             this.guestCount = 0;
             this.joinState = 'joining';
             this.connectionError = false;
@@ -120,6 +135,8 @@ export default {
                 if (!current()) return;
                 subscriptionFailed = true;
                 this.connectionError = true;
+                this.sessionState = null;
+                this.phase = 'unavailable';
                 this.joinState = 'error';
                 this.retrying = false;
                 // Invalidate the in-flight read-only probe and any callbacks
@@ -134,9 +151,31 @@ export default {
                 const unsubscribe = client.subscribe(eventId, projection => {
                     if (!current() || this.connectionError) return;
                     const safeProjection = projection && typeof projection === 'object' ? projection : {};
+                    if (safeProjection.formatVersion === 2) {
+                        const { phase, roundId, revision, roundCount, lastRevealedRoundId } = safeProjection;
+                        const state = { phase, roundId, revision,
+                            ...(lastRevealedRoundId === undefined ? {} : { lastRevealedRoundId }) };
+                        this.formatVersion = 2;
+                        if (!validSessionState(state, roundCount) || !Array.isArray(safeProjection.participants) ||
+                            safeProjection.participants.length > 50 || safeProjection.participants.some(participant =>
+                                !participant || typeof participant.id !== 'string' || typeof participant.nickname !== 'string')) {
+                            this.sessionState = null;
+                            this.phase = 'unavailable';
+                            this.guestCount = 0;
+                            return;
+                        }
+                        if (this.sessionState && revision < this.sessionState.revision) return;
+                        this.sessionState = { ...state, roundCount };
+                        this.title = typeof safeProjection.title === 'string' ? safeProjection.title : 'Birthday GeoGuess';
+                        this.phase = phase;
+                        this.guestCount = safeProjection.participants.length;
+                        return;
+                    }
+                    this.sessionState = null;
+                    this.formatVersion = safeProjection.formatVersion === undefined || safeProjection.formatVersion === 1 ? 1 : null;
                     const publicTitle = typeof safeProjection.title === 'string'
                         ? safeProjection.title : 'Birthday GeoGuess';
-                    const publicPhase = Object.prototype.hasOwnProperty.call(PHASES, safeProjection.phase)
+                    const publicPhase = this.formatVersion === 1 && safeProjection.phase !== 'ready' && Object.prototype.hasOwnProperty.call(PHASES, safeProjection.phase)
                         ? safeProjection.phase : 'unavailable';
                     const participants = Array.isArray(safeProjection.participants)
                         ? safeProjection.participants : [];
