@@ -37,8 +37,14 @@ function emulatorAdapter(target, environment = process.env, fetchRequest = globa
             if (await current.json() !== null) return false;
             // Firebase's conditional PUT is an atomic compare-and-set transaction:
             // if another writer wins after the read, the server returns 412.
-            const response = await request(url, { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json', 'if-match': etag }, body: JSON.stringify(event) });
+            let response;
+            try {
+                response = await request(url, { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json', 'if-match': etag }, body: JSON.stringify(event) });
+            } catch { throw fail('create-unconfirmed'); }
             if (response.status === 412) return false;
+            // A lost acknowledgement or server error cannot prove that the
+            // conditional write was not accepted. Never retry with a new ETag.
+            if (response.status >= 500) throw fail('create-unconfirmed');
             if (!response.ok) throw fail('create-failed');
             return true;
         },
