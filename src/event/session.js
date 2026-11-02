@@ -33,7 +33,7 @@ const permissionDenied = error => /^(database\/)?permission-denied$/.test(
     typeof error.code === 'string' ? error.code.toLowerCase().replace(/_/g, '-') : '');
 
 function stateValid(value, count) {
-    if (!record(value) || !roundValid(value.roundId) || indexOf(value.roundId) > count) return false;
+    if (!record(value) || typeof value.phase !== 'string' || !roundValid(value.roundId) || indexOf(value.roundId) > count) return false;
     const index = indexOf(value.roundId);
     const revisions = { lobby: 0, ready: 4 * index - 4, guessing: 4 * index - 3, closed: 4 * index - 2, reveal: 4 * index - 1, complete: 4 * index };
     if (!own(revisions, value.phase) || value.revision !== revisions[value.phase] ||
@@ -291,7 +291,122 @@ export function createSessionClient(database, identity) {
     }
     const roundRead = (eventId, id, operation, publicRead = false) => roundValid(id) ? run(eventId, id, operation, publicRead) :
         Promise.reject(failure('invalid-round-id'));
+    /** Public server-clock view. Optimistic local timing writes are never confirmations. */
+    function subscribeTiming(eventId, roundId, onChange, onError = () => {}) {
+        if (typeof eventId !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(eventId) ||
+            typeof onChange !== 'function' || typeof onError !== 'function') throw failure('invalid-event-id');
+        if (!roundValid(roundId)) throw failure('invalid-round-id');
+        let live = true;
+        let generation = 0;
+        let budget;
+        let connected = false;
+        let offsetMs = null;
+        let timingKnown = false;
+        let confirmed = null;
+        const listeners = [];
+        const safe = (callback, value) => { try { callback(value); } catch { /* Consumer exceptions are not provider failures. */ } };
+        const disconnected = () => safe(onChange, { timing: confirmed, offsetMs, connected: false });
+        const stop = () => {
+            if (!live) return;
+            live = false;
+            generation += 1;
+            clearTimeout(budget);
+            listeners.splice(0).forEach(({ reference, callback }) => {
+                try { reference.off('value', callback); } catch { /* Preserve disposal of the remaining listeners. */ }
+            });
+        };
+        const unavailable = (error = failure('unavailable')) => {
+            if (!live) return;
+            disconnected();
+            safe(onError, error);
+        };
+        const reconcile = () => {
+            const ticket = ++generation;
+            clearTimeout(budget);
+            if (!live) return;
+            if (!connected || offsetMs === null || !timingKnown) {
+                disconnected();
+                return;
+            }
+            let expired = false;
+            const active = () => live && ticket === generation && !expired;
+            const writes = pending(database, eventId);
+            if (writes && writes.size) disconnected();
+            budget = setTimeout(() => {
+                if (!active()) return;
+                expired = true;
+                unavailable();
+            }, 15000);
+            Promise.resolve().then(async () => {
+                while (active()) {
+                    const queued = pending(database, eventId);
+                    if (queued && queued.size) {
+                        disconnected();
+                        await Promise.allSettled(Array.from(queued));
+                        // A late acknowledgement can restore the observer after its budget elapsed.
+                        if (expired && live && ticket === generation) reconcile();
+                        continue;
+                    }
+                    if ((await database.ref(`events/${eventId}/public/formatVersion`).once('value')).val() !== 2) throw failure('unsupported-format');
+                    if (!active()) return;
+                    const count = (await database.ref(`events/${eventId}/public/roundCount`).once('value')).val();
+                    if (!Number.isInteger(count) || count < 1 || count > 20) throw failure('unavailable');
+                    if (indexOf(roundId) > count) throw failure('invalid-round-id');
+                    if (!active()) return;
+                    const snapshot = await database.ref(`events/${eventId}/public/rounds/${roundId}/timing`).once('value');
+                    if (!active()) return;
+                    const nextWrites = pending(database, eventId);
+                    if (nextWrites && nextWrites.size) continue;
+                    const timing = snapshot.val();
+                    if (timing !== null && !timingValid(timing, roundId)) throw failure('unavailable');
+                    confirmed = timing;
+                    clearTimeout(budget);
+                    safe(onChange, { timing: confirmed, offsetMs, connected: true });
+                    return;
+                }
+            }).catch(error => {
+                if (!active()) return;
+                clearTimeout(budget);
+                const terminal = ['unsupported-format', 'invalid-round-id'].includes(error.code);
+                unavailable(terminal ? error : failure('unavailable'));
+                if (terminal) stop();
+            });
+        };
+        const listen = (path, receive) => {
+            if (!live) return;
+            const reference = database.ref(path);
+            const callback = snapshot => {
+                if (!live) return;
+                receive(snapshot.val());
+                reconcile();
+            };
+            listeners.push({ reference, callback });
+            try {
+                reference.on('value', callback, () => {
+                    if (!live) return;
+                    unavailable();
+                    stop();
+                });
+            } finally {
+                // Some providers finish registration after a synchronous cancellation.
+                if (!live) {
+                    try { reference.off('value', callback); } catch { /* Already disposed. */ }
+                }
+            }
+        };
+        disconnected();
+        try {
+            listen('.info/connected', value => { connected = value === true; });
+            listen('.info/serverTimeOffset', value => { offsetMs = Number.isSafeInteger(value) ? value : null; });
+            listen(`events/${eventId}/public/rounds/${roundId}/timing`, () => { timingKnown = true; });
+        } catch {
+            unavailable();
+            stop();
+        }
+        return stop;
+    }
     return {
+        subscribeTiming,
         start: (eventId, expected) => command(eventId, expected, 'start'),
         close: (eventId, expected) => command(eventId, expected, 'close'),
         reveal: (eventId, expected) => command(eventId, expected, 'reveal'),

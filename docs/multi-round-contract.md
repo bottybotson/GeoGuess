@@ -1,7 +1,10 @@
-# Ordered rounds: bounded protocol proposal
+# Ordered rounds: bounded protocol contract
 
 For [#50](https://github.com/bottybotson/GeoGuess/issues/50), following merged
-#47. This source-reviewed contract is **not implemented or emulator-verified**.
+#47 and the isolated protocol proof in #59. The protocol is implemented and
+emulator-verified; versioned runtime/combined Rules integration is tracked in
+#61, configuration in #62, and routed pages in #71–#73. These separate slices
+do not establish live multi-round event readiness or deploy any Rules.
 Keep Vue 2, Firebase SDK 8, exact panoramas, existing scoring and 50-slot admission.
 
 ## Version and data

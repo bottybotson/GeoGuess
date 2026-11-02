@@ -319,3 +319,9 @@ test('caller mutation while awaiting identity cannot change the command token or
     restoreGuess.resolve({ uid: 'guest' });
     expect(await submission).toEqual({ status: 'submitted', guess: { lat: 1, lng: 2 } });
 });
+
+test.each([['lobby'], { toString: () => 'lobby' }, 0, null])('state phase %p cannot use property coercion to bypass validation', async phase => {
+    const f = fixture({ 'public/state': { phase, roundId: 'r01', revision: 0 } });
+    await expect(f.client.getState('event')).rejects.toMatchObject({ code: 'unavailable' });
+    expect(f.identity.ensureUser).not.toHaveBeenCalled();
+});
