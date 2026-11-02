@@ -5,15 +5,13 @@
 </template>
 
 <script>
-function validTiming(timing) {
-    return !!timing && typeof timing === 'object' && timing.roundId === 'r1' &&
-        Number.isSafeInteger(timing.deadlineMs) && timing.deadlineMs > 0;
-}
+import { validTiming } from '@/event/timing';
 
 export default {
     name: 'EventRoundTimer',
     props: {
         timing: { type: Object, default: null },
+        roundId: { type: String, default: 'r1' },
         nowMs: { type: Number, default: null },
         connected: { type: Boolean, default: false },
     },
@@ -23,7 +21,7 @@ export default {
                 return 'Waiting for connection';
             }
             if (this.timing === null) return 'No time limit';
-            if (!validTiming(this.timing)) return 'Waiting for connection';
+            if (!validTiming(this.timing, this.roundId)) return 'Waiting for connection';
             const remaining = Math.max(0, this.timing.deadlineMs - this.nowMs);
             if (remaining === 0) return 'Time is up—waiting for host';
             const totalSeconds = Math.ceil(remaining / 1000);
