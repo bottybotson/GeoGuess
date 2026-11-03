@@ -32,6 +32,7 @@
             <button v-if="pendingCommand" type="button" :disabled="busy || !timingConnected" @click="retryCommand">Retry {{ pendingCommand.command }}</button>
             <p v-if="state.phase === 'ready'">Prepare this round together. Start round publishes the next clue.</p>
             <EventRoundResults v-if="reveal" :reveal="reveal" :cumulative="true" :final="state.phase === 'complete'" />
+            <EventGameCreation :source-event-id="eventId" :host-uid="authUid || ''" :host-client="hostClient" />
         </section>
     </main>
 </template>
@@ -40,6 +41,7 @@
 import EventRoundResults from '@/components/event/EventRoundResults.vue';
 import EventRoundTimer from '@/components/event/EventRoundTimer.vue';
 import EventTimingControls from '@/components/event/EventTimingControls.vue';
+import EventGameCreation from '@/components/event/EventGameCreation.vue';
 import timingView from '@/event/timing-view';
 import { deadlineAfter, validTiming } from '@/event/timing';
 
@@ -80,7 +82,7 @@ export default {
     name: 'EventSessionHost',
     inheritAttrs: false,
     mixins: [timingView],
-    components: { EventRoundResults, EventRoundTimer, EventTimingControls },
+    components: { EventRoundResults, EventRoundTimer, EventTimingControls, EventGameCreation },
     props: { eventId: { type: String, required: true }, hostClient: { type: Object, required: true } },
     data: () => ({
         email: '', password: '', authenticated: false, authorized: false, privateSetup: null,

@@ -74,6 +74,18 @@ export function createHostClient(database, auth) {
             return result.user;
         },
         signOut: () => auth.signOut(),
+        async getIdToken(expectedUid) {
+            const user = auth.currentUser;
+            if (typeof expectedUid !== 'string' || !expectedUid || !user || user.uid !== expectedUid ||
+                typeof user.getIdToken !== 'function') {
+                throw Object.assign(new Error('Host identity changed.'), { code: 'host-identity-changed' });
+            }
+            const token = await user.getIdToken();
+            if (auth.currentUser !== user || user.uid !== expectedUid || typeof token !== 'string' || !token) {
+                throw Object.assign(new Error('Host identity changed.'), { code: 'host-identity-changed' });
+            }
+            return token;
+        },
         getFormatVersion: lobby.getFormatVersion,
         subscribe: lobby.subscribe,
         getHostSetup: round.getHostSetup,

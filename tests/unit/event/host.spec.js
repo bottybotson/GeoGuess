@@ -93,6 +93,17 @@ test('host inspects formatVersion without restoring organizer identity or signin
     expect(auth.signInWithEmailAndPassword).not.toHaveBeenCalled();
 });
 
+test('host ID token is available only from the separately named current host identity', async () => {
+    const user = { uid: 'host-1', getIdToken: jest.fn().mockResolvedValue('host-id-token') };
+    const auth = { ...authFixture(), currentUser: user };
+    const client = createHostClient({}, auth);
+    await expect(client.getIdToken('host-1')).resolves.toBe('host-id-token');
+    expect(user.getIdToken).toHaveBeenCalledWith();
+    await expect(client.getIdToken('other-host')).rejects.toMatchObject({ code: 'host-identity-changed' });
+    user.getIdToken.mockImplementationOnce(async () => { auth.currentUser = { uid: 'other-host' }; return 'old-token'; });
+    await expect(client.getIdToken('host-1')).rejects.toMatchObject({ code: 'host-identity-changed' });
+});
+
 test('continuous host Auth observer reports sign-out and account switches until disposed', () => {
     const auth = authFixture(); let next; let failed;
     const released = jest.fn();
