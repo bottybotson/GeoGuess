@@ -11,7 +11,15 @@ const deferred = () => {
 function makeClient({ user = null } = {}) {
     const listeners = [];
     const timingListeners = [];
+    const authListeners = [];
     return {
+        authListeners,
+        subscribeAuth: jest.fn((onChange, onError) => {
+            const listener = { onChange, onError, dispose: jest.fn() };
+            authListeners.push(listener);
+            onChange(user);
+            return listener.dispose;
+        }),
         listeners,
         timingListeners,
         restore: jest.fn().mockResolvedValue(user),
@@ -46,8 +54,7 @@ const projection = (phase = 'lobby', participants = []) => ({ title: 'Party', ph
 
 async function readyHost(client = makeClient({ user: { uid: 'host' } }), eventId = 'party') {
     const wrapper = mount(EventHost, { propsData: { eventId, hostClient: client } });
-    await Promise.resolve();
-    await wrapper.vm.$nextTick();
+    await flush(wrapper);
     return { wrapper, client };
 }
 const flush = async wrapper => { for (let i = 0; i < 8; i++) await Promise.resolve(); await wrapper.vm.$nextTick(); };
@@ -74,6 +81,93 @@ describe('EventHost', () => {
         expect(wrapper.text()).toContain('Start game');
         wrapper.destroy();
         expect(client.listeners[0].dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows New game only after the authorized v1 host setup resolves and keeps the source page mounted', async () => {
+        const setup = deferred();
+        const client = makeClient({ user: { uid: 'host' } });
+        client.getHostSetup.mockReturnValue(setup.promise);
+        const { wrapper } = await readyHost(client);
+        expect(wrapper.find('[aria-label="Host controls"]').exists()).toBe(false);
+        setup.resolve({ answer: { lat: 1, lng: 2 }, panoramaId: 'private' });
+        await flush(wrapper);
+        expect(wrapper.text()).toContain('New game with these rounds');
+        expect(wrapper.text()).toContain('Host the birthday game');
+        wrapper.destroy();
+    });
+
+    it('waits for the initial Auth observation before restoring private access', async () => {
+        const client = makeClient({ user: { uid: 'host' } });
+        let notify;
+        client.subscribeAuth.mockImplementation(onChange => { notify = onChange; return jest.fn(); });
+        const { wrapper } = await readyHost(client);
+        expect(client.restore).not.toHaveBeenCalled();
+        expect(wrapper.vm.privateSetup).toBeNull();
+        expect(wrapper.text()).not.toContain('New game with these rounds');
+        notify(null);
+        await flush(wrapper);
+        expect(client.getHostSetup).not.toHaveBeenCalled();
+        expect(wrapper.find('form').exists()).toBe(true);
+        wrapper.destroy();
+    });
+
+    it('invalidates private setup and pending callbacks synchronously on account switches and sign-out', async () => {
+        const client = makeClient({ user: { uid: 'host' } });
+        const { wrapper } = await readyHost(client);
+        const oldListener = client.listeners[0], nextSetup = deferred();
+        client.restore.mockResolvedValue({ uid: 'other-host' });
+        client.getHostSetup.mockReturnValue(nextSetup.promise);
+        client.authListeners[0].onChange({ uid: 'other-host' });
+        expect(wrapper.vm.authorized).toBe(false);
+        expect(wrapper.vm.privateSetup).toBeNull();
+        expect(oldListener.dispose).toHaveBeenCalledTimes(1);
+        await flush(wrapper);
+        expect(wrapper.text()).not.toContain('New game with these rounds');
+        client.authListeners[0].onChange(null);
+        nextSetup.resolve({ answer: { lat: 9, lng: 8 }, panoramaId: 'stale-private' });
+        oldListener.onChange(projection('reveal', [{ id: 'old', nickname: 'Stale guest' }]));
+        await flush(wrapper);
+        expect(wrapper.vm.privateSetup).toBeNull();
+        expect(wrapper.vm.authorized).toBe(false);
+        expect(wrapper.text()).not.toContain('Stale guest');
+        expect(wrapper.text()).not.toContain('New game with these rounds');
+        wrapper.destroy();
+    });
+
+    it('fails closed on Auth errors and requires a fresh observation before reconnecting', async () => {
+        const { wrapper, client } = await readyHost();
+        const observer = client.authListeners[0];
+        observer.onError(new Error('private-provider-detail'));
+        expect(wrapper.vm.authorized).toBe(false);
+        expect(wrapper.vm.privateSetup).toBeNull();
+        expect(observer.dispose).toHaveBeenCalledTimes(1);
+        await flush(wrapper);
+        expect(client.restore).toHaveBeenCalledTimes(1);
+        await wrapper.vm.restore();
+        observer.onChange({ uid: 'host' });
+        await flush(wrapper);
+        expect(client.restore).toHaveBeenCalledTimes(1);
+        expect(wrapper.text()).not.toContain('private-provider-detail');
+        await wrapper.findAll('button').wrappers.find(button => button.text() === 'Reconnect').trigger('click');
+        await flush(wrapper);
+        expect(client.subscribeAuth).toHaveBeenCalledTimes(2);
+        expect(wrapper.vm.authorized).toBe(true);
+        wrapper.destroy();
+    });
+
+    it('ignores disposed Auth observers across event changes, including a switch back', async () => {
+        const { wrapper, client } = await readyHost();
+        const observer = client.authListeners[0];
+        await wrapper.setProps({ eventId: 'second' });
+        await wrapper.setProps({ eventId: 'party' });
+        await flush(wrapper);
+        observer.onChange(null);
+        observer.onError(new Error('stale-error'));
+        expect(wrapper.vm.authUid).toBe('host');
+        expect(wrapper.vm.authorized).toBe(true);
+        expect(observer.dispose).toHaveBeenCalledTimes(1);
+        wrapper.destroy();
+        expect(client.authListeners[2].dispose).toHaveBeenCalledTimes(1);
     });
 
     it('uses labelled email and password fields, clears the password, and shows generic sign-in failures', async () => {
