@@ -1,9 +1,18 @@
 import { mount } from '@vue/test-utils';
 import EventSetup from '@/pages/event/EventSetup.vue';
 import EventPanoramaPreview from '@/components/event/EventPanoramaPreview.vue';
+import OrderedRoundsEditor from '@/components/event/OrderedRoundsEditor.vue';
 const { validate } = require('../../../../scripts/event-setup/core.cjs');
 
+const originalStructuredClone = global.structuredClone;
+beforeAll(() => { global.structuredClone = value => JSON.parse(JSON.stringify(value)); });
+afterAll(() => {
+    if (originalStructuredClone) global.structuredClone = originalStructuredClone;
+    else delete global.structuredClone;
+});
+
 const mapsLoader = jest.fn();
+beforeEach(() => mapsLoader.mockClear());
 const values = {
     projectId: 'party-project', databaseUrl: 'https://party-project.firebaseio.com', eventId: 'birthday',
     hostUid: 'existing-host-uid', title: 'Birthday game', panoramaId: 'curated-pano', heading: '137', pitch: '-8',
@@ -26,7 +35,7 @@ describe('EventSetup', () => {
         expect(wrapper.find('#event-setup-panorama').element.value).toBe('');
         expect(wrapper.find('#event-setup-difficulty').element.value).toBe('2000');
         expect(mapsLoader).not.toHaveBeenCalled();
-        expect(wrapper.findAll('input').wrappers.every(input => !input.element.value || input.element.id === 'event-setup-difficulty')).toBe(true);
+        expect(wrapper.findAll('input').wrappers.every(input => input.element.type === 'radio' || !input.element.value || input.element.id === 'event-setup-difficulty' || input.element.id.endsWith('-difficulty'))).toBe(true);
         wrapper.destroy();
     });
 
@@ -46,11 +55,12 @@ describe('EventSetup', () => {
                     answer: { lat: 40.5, lng: -73.25 }, difficulty: 2000 } },
             },
         });
-        expect(validate(wrapper.vm.seed, {
-            projectId: wrapper.vm.seed.projectId,
-            databaseUrl: wrapper.vm.seed.databaseUrl,
-            eventId: wrapper.vm.seed.eventId,
-        })).toEqual(wrapper.vm.seed);
+        const detachedSeed = JSON.parse(JSON.stringify(wrapper.vm.seed));
+        expect(validate(detachedSeed, {
+            projectId: detachedSeed.projectId,
+            databaseUrl: detachedSeed.databaseUrl,
+            eventId: detachedSeed.eventId,
+        })).toEqual(detachedSeed);
         expect(JSON.parse(wrapper.find('pre').text())).toEqual(wrapper.vm.seed);
 
         await wrapper.find('#event-setup-title').setValue('Changed title');
@@ -88,6 +98,19 @@ describe('EventSetup', () => {
         expect(wrapper.vm.validSeed).toBe(false);
         await wrapper.find('#event-setup-lat').setValue('-90');
         expect(wrapper.vm.validSeed).toBe(true);
+        wrapper.destroy();
+    });
+
+    it('keeps an in-memory ordered draft when switching preparation modes', async () => {
+        const wrapper = mount(EventSetup, { propsData: { mapsLoader } });
+        await wrapper.find('input[type="radio"][value="ordered"]').setChecked();
+        const editor = wrapper.findComponent(OrderedRoundsEditor);
+        editor.vm.addRound();
+        expect(editor.vm.rounds).toHaveLength(2);
+        await wrapper.find('input[type="radio"][value="single"]').setChecked();
+        await wrapper.find('input[type="radio"][value="ordered"]').setChecked();
+        expect(wrapper.findComponent(OrderedRoundsEditor).vm.rounds).toHaveLength(2);
+        expect(mapsLoader).not.toHaveBeenCalled();
         wrapper.destroy();
     });
 
