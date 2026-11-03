@@ -33,6 +33,7 @@ A single, live, host-led GeoGuessr-style game at a birthday celebration. Locatio
 ## Explicit boundaries
 
 - Live synchronized session only; **no join-anytime game mode** is needed.
+- Players’ phones are the primary usability target, especially for older/inexperienced guests. Host/admin controls must be usable on phone and desktop but do not need a mobile-first redesign. Preserve the approved presenter appearance.
 - Street View is acceptable and preferred over building a custom photo viewer for the core game.
 - A full Google Maps replacement, user accounts, ongoing public tournaments, and elaborate anti-cheat mechanisms are **not** MVP requirements.
 - No personal/historical photos should be shown *as clues during guessing* by default.

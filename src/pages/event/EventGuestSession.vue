@@ -1,17 +1,19 @@
 <template>
-    <section class="event-guest-session" aria-live="polite">
+    <section class="event-guest-session" :class="{ 'event-guest-session--playing': ['guessing', 'closed', 'reveal'].includes(phase) }" aria-live="polite">
         <template v-if="currentState">
-            <h2>Round {{ roundNumber }} of {{ currentState.roundCount }}</h2>
+            <div class="event-guest-session__heading">
+                <h2>Round {{ roundNumber }} of {{ currentState.roundCount }}</h2>
+                <EventRoundTimer
+                    v-if="phase === 'guessing'" :round-id="currentState.roundId"
+                    :timing="timing" :now-ms="nowMs" :connected="timingConnected"
+                />
+            </div>
             <p v-if="phase === 'lobby'" role="status">You’re ready. The host will start the first round.</p>
             <p v-else-if="phase === 'ready'" role="status">The next round is ready. Wait for the host to start.</p>
             <p v-else-if="phase === 'complete'" role="status">The game is complete. Here are the final standings.</p>
             <p v-if="loading" role="status">Loading the round…</p>
             <p v-if="error" role="alert">We couldn’t confirm the round. Check your connection and retry.</p>
             <button v-if="error" type="button" @click="refresh">Retry connection</button>
-            <EventRoundTimer
-                v-if="phase === 'guessing'" :round-id="currentState.roundId"
-                :timing="timing" :now-ms="nowMs" :connected="timingConnected"
-            />
             <EventRoundPlay
                 v-if="activeRound" :key="playKey" :round="activeRound" :phase="effectivePhase"
                 :maps-loader="mapsLoader" :submission-state="submissionState" :submitted-guess="submittedGuess"
@@ -187,4 +189,10 @@ export default {
 <style scoped>
 .event-guest-session { max-width: 72rem; margin: 1rem auto; }
 .event-guest-session > button { min-height: 48px; padding: 0.75rem 1rem; font: inherit; }
+@media (max-width: 800px), (max-width: 1000px) and (max-height: 500px) {
+    .event-guest-session--playing { margin: 0.25rem auto 0; }
+    .event-guest-session--playing .event-guest-session__heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.25rem 0.5rem; margin-bottom: 0.25rem; }
+    .event-guest-session--playing h2 { margin: 0; font-size: 1rem; line-height: 1.4; }
+    .event-guest-session--playing .event-round-timer { font-size: 1rem; }
+}
 </style>

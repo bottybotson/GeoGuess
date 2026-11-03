@@ -231,6 +231,74 @@ describe('EventGuessMap', () => {
         wrapper.destroy();
     });
 
+    it('resizes the same map after visibility and element changes, preserving viewport and pin', async () => {
+        jest.useFakeTimers();
+        const observerBefore = window.ResizeObserver;
+        let resize;
+        const disconnect = jest.fn();
+        window.ResizeObserver = jest.fn(callback => {
+            resize = callback;
+            return { observe: jest.fn(), disconnect };
+        });
+        const { maps, map, markers, listeners } = makeMaps();
+        let center = { lat: 42, lng: -71 };
+        map.getCenter = jest.fn(() => center);
+        map.setCenter = jest.fn(value => { center = value; });
+        map.zoom = 9;
+        maps.event.trigger = jest.fn(() => { center = { lat: 0, lng: 0 }; });
+        const loader = jest.fn().mockResolvedValue(maps);
+        const wrapper = await mounted({ mapsLoader: loader, active: false, fill: true, selected: { lat: 10, lng: 20 } });
+        expect(maps.Map.mock.calls[0][1].controlSize).toBe(48);
+        listeners[0].callback(click(1, 2));
+        expect(wrapper.emitted('select')).toBeUndefined();
+        await wrapper.setProps({ active: true, fill: true, gestureHandling: 'greedy' });
+        jest.runOnlyPendingTimers();
+        expect(maps.event.trigger).toHaveBeenCalledWith(map, 'resize');
+        expect(center).toEqual({ lat: 42, lng: -71 });
+        expect(map.zoom).toBe(9);
+        expect(map.setOptions).toHaveBeenCalledWith({ gestureHandling: 'greedy' });
+        expect(markers).toHaveLength(1);
+        const resized = maps.event.trigger.mock.calls.length;
+        await wrapper.setProps({ active: false });
+        resize();
+        await wrapper.vm.$nextTick();
+        jest.runOnlyPendingTimers();
+        expect(maps.event.trigger).toHaveBeenCalledTimes(resized);
+        await wrapper.setProps({ active: true });
+        resize();
+        await wrapper.vm.$nextTick();
+        jest.runOnlyPendingTimers();
+        expect(maps.Map).toHaveBeenCalledTimes(1);
+        expect(loader).toHaveBeenCalledTimes(1);
+        expect(markers[0].options.position).toEqual({ lat: 10, lng: 20 });
+        expect(maps.event.trigger.mock.calls.length).toBeGreaterThan(resized);
+        wrapper.destroy();
+        expect(disconnect).toHaveBeenCalledTimes(1);
+        const calls = maps.event.trigger.mock.calls.length;
+        resize();
+        await wrapper.vm.$nextTick();
+        jest.runOnlyPendingTimers();
+        expect(maps.event.trigger).toHaveBeenCalledTimes(calls);
+        window.ResizeObserver = observerBefore;
+        jest.useRealTimers();
+    });
+
+    it('ignores a stale unresolved loader when a replacement succeeds first', async () => {
+        let finishOld;
+        const stale = makeMaps();
+        const fresh = makeMaps();
+        const wrapper = mount(EventGuessMap, { propsData: {
+            mapsLoader: () => new Promise(resolve => { finishOld = resolve; }), active: false,
+        } });
+        await wrapper.setProps({ mapsLoader: () => Promise.resolve(fresh.maps) });
+        await Promise.resolve();
+        finishOld(stale.maps);
+        await Promise.resolve();
+        expect(stale.maps.Map).not.toHaveBeenCalled();
+        expect(fresh.maps.Map).toHaveBeenCalledTimes(1);
+        wrapper.destroy();
+    });
+
     it('reports an unusable Maps API and keeps the retry control available', async () => {
         const wrapper = await mounted({ mapsLoader: () => Promise.resolve({}) });
         expect(wrapper.find('[role="alert"]').exists()).toBe(true);

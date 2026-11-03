@@ -134,6 +134,58 @@ describe('EventPanorama', () => {
         expect(fresh.panorama.setVisible).toHaveBeenCalledWith(false);
     });
 
+    it('resizes a retained panorama without resetting actual navigation, camera or zoom', async () => {
+        jest.useFakeTimers();
+        const observerBefore = window.ResizeObserver;
+        let resize;
+        const disconnect = jest.fn();
+        window.ResizeObserver = jest.fn(callback => {
+            resize = callback;
+            return { observe: jest.fn(), disconnect };
+        });
+        const { maps, panorama } = makeMaps();
+        maps.event.trigger = jest.fn();
+        panorama.pano = 'walked-to-another-panorama';
+        panorama.pov = { heading: 275, pitch: 12 };
+        panorama.zoom = 3;
+        panorama.setPano = jest.fn();
+        panorama.setPov = jest.fn();
+        panorama.setZoom = jest.fn();
+        const loader = jest.fn().mockResolvedValue(maps);
+        const wrapper = mount(EventPanorama, { propsData: { round, mapsLoader: loader, fill: true } });
+        await flushPromises();
+        expect(maps.StreetViewPanorama.mock.calls[0][1].controlSize).toBe(48);
+        jest.runOnlyPendingTimers();
+        await wrapper.setProps({ active: false });
+        const count = maps.event.trigger.mock.calls.length;
+        resize();
+        await wrapper.vm.$nextTick();
+        jest.runOnlyPendingTimers();
+        expect(maps.event.trigger).toHaveBeenCalledTimes(count);
+        await wrapper.setProps({ active: true, fill: true });
+        resize();
+        await wrapper.vm.$nextTick();
+        jest.runOnlyPendingTimers();
+        expect(maps.event.trigger).toHaveBeenCalledWith(panorama, 'resize');
+        expect(maps.StreetViewPanorama).toHaveBeenCalledTimes(1);
+        expect(loader).toHaveBeenCalledTimes(1);
+        expect(panorama.pano).toBe('walked-to-another-panorama');
+        expect(panorama.pov).toEqual({ heading: 275, pitch: 12 });
+        expect(panorama.zoom).toBe(3);
+        expect(panorama.setPano).not.toHaveBeenCalled();
+        expect(panorama.setPov).not.toHaveBeenCalled();
+        expect(panorama.setZoom).not.toHaveBeenCalled();
+        wrapper.destroy();
+        expect(disconnect).toHaveBeenCalledTimes(1);
+        const finalCount = maps.event.trigger.mock.calls.length;
+        resize();
+        await wrapper.vm.$nextTick();
+        jest.runOnlyPendingTimers();
+        expect(maps.event.trigger).toHaveBeenCalledTimes(finalCount);
+        window.ResizeObserver = observerBefore;
+        jest.useRealTimers();
+    });
+
     it('does not select a fallback panorama when the configured identifier is absent', async () => {
         const mapsLoader = jest.fn();
         const wrapper = mount(EventPanorama, {
