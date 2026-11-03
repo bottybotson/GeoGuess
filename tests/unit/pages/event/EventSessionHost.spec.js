@@ -84,6 +84,7 @@ describe('multi-round host', () => {
         const { wrapper, hostClient: host } = await ready();
         const send = async (phase, id, revision) => { host.listeners[0].onChange(projection(phase, id, revision)); await flush(wrapper); };
         expect(wrapper.text()).toContain('Round 1 of 2');
+        expect(wrapper.text()).toContain('New game with these rounds');
         expect(wrapper.text()).not.toContain('private-panorama');
         for (const [label, command, phase, revision] of [['Start round', 'start', 'guessing', 1], ['Close guessing', 'close', 'closed', 2], ['Reveal results', 'reveal', 'reveal', 3]]) {
             await button(wrapper, label).trigger('click'); await flush(wrapper);

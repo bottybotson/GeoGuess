@@ -7,12 +7,12 @@
             <input id="event-host-email" v-model="email" type="email" autocomplete="username" required>
             <label for="event-host-password">Password</label>
             <input id="event-host-password" v-model="password" type="password" autocomplete="current-password" required>
-            <button type="submit" :disabled="busy || !readyToSignIn">{{ busy ? 'Please wait…' : 'Sign in' }}</button>
+            <button type="submit" :disabled="busy || authError || authUid === undefined || !readyToSignIn">{{ busy ? 'Please wait…' : 'Sign in' }}</button>
         </form>
 
         <p v-if="message" class="event-host__message" role="status" aria-live="polite">{{ message }}</p>
         <p v-if="error" class="event-host__error" role="alert">{{ error }}</p>
-        <button v-if="(error || timingError) && authenticated" type="button" :disabled="busy" @click="restore">Reconnect</button>
+        <button v-if="authError || ((error || timingError) && authenticated)" type="button" :disabled="busy" @click="reconnect">Reconnect</button>
 
         <section v-if="authenticated && authorized" class="event-host__session" aria-label="Host controls">
             <button type="button" :disabled="busy" @click="signOut">Sign out</button>
@@ -42,6 +42,7 @@
                     Reveal results
                 </button>
                 <EventRoundResults v-if="phase === 'reveal' && reveal" :reveal="reveal" />
+                <EventGameCreation :source-event-id="eventId" :host-uid="authUid || ''" :host-client="hostClient" />
             </template>
         </section>
     </main>
@@ -51,6 +52,7 @@
 import EventRoundResults from '@/components/event/EventRoundResults.vue';
 import EventRoundTimer from '@/components/event/EventRoundTimer.vue';
 import EventTimingControls from '@/components/event/EventTimingControls.vue';
+import EventGameCreation from '@/components/event/EventGameCreation.vue';
 import timingView from '@/event/timing-view';
 import { deadlineAfter, validTiming } from '@/event/timing';
 
@@ -73,7 +75,7 @@ export default {
     name: 'EventLegacyHost',
     inheritAttrs: false,
     mixins: [timingView],
-    components: { EventRoundResults, EventRoundTimer, EventTimingControls },
+    components: { EventRoundResults, EventRoundTimer, EventTimingControls, EventGameCreation },
     props: {
         eventId: { type: String, required: true },
         hostClient: { type: Object, required: true },
@@ -98,6 +100,10 @@ export default {
             destroyed: false,
             pendingDeadlineMs: null,
             timingError: '',
+            authUid: undefined,
+            authError: false,
+            authDisposer: null,
+            authEpoch: 0,
         };
     },
     computed: {
@@ -114,8 +120,8 @@ export default {
         },
     },
     watch: {
-        eventId() { this.scheduleReconnect(); },
-        hostClient() { this.scheduleReconnect(); },
+        eventId() { this.observeHostAuth(); },
+        hostClient() { this.observeHostAuth(); },
         phase(value) {
             if (value !== 'guessing') {
                 this.pendingDeadlineMs = null;
@@ -124,15 +130,67 @@ export default {
             } else if (this.authorized) this.observeTiming(this.hostClient, this.eventId);
         },
     },
-    mounted() { this.restore(); },
+    mounted() { this.observeHostAuth(); },
     beforeDestroy() {
         this.destroyed = true;
         this.pendingDeadlineMs = null;
+        this.stopHostAuth();
         this.invalidateSession();
     },
     methods: {
+        stopHostAuth() {
+            this.authEpoch += 1;
+            const dispose = this.authDisposer;
+            this.authDisposer = null;
+            if (dispose) { try { dispose(); } catch (error) { /* best effort */ } }
+        },
         isCurrent(epoch, client, eventId) {
             return !this.destroyed && this.epoch === epoch && this.hostClient === client && this.eventId === eventId;
+        },
+        reconnect() {
+            if (this.authError) this.observeHostAuth();
+            else this.restore();
+        },
+        observeHostAuth() {
+            this.stopHostAuth();
+            this.invalidateSession();
+            this.authUid = undefined;
+            this.authError = false;
+            this.error = '';
+            this.message = 'Checking for a saved host session…';
+            this.busy = true;
+            const authEpoch = this.authEpoch, client = this.hostClient, eventId = this.eventId;
+            let cancelled = false, returned, disposed = false;
+            const release = () => { if (!disposed && typeof returned === 'function') { disposed = true; returned(); } };
+            const cancel = () => { cancelled = true; try { release(); } catch (error) { /* best effort */ } };
+            const current = () => !cancelled && !this.destroyed && authEpoch === this.authEpoch &&
+                client === this.hostClient && eventId === this.eventId;
+            const fail = () => {
+                if (!current()) return;
+                cancel();
+                this.invalidateSession();
+                this.authUid = undefined;
+                this.authError = true;
+                this.message = '';
+                this.error = 'Host account status is unavailable. Reconnect to check host access.';
+            };
+            this.authDisposer = cancel;
+            try {
+                returned = client.subscribeAuth(user => {
+                    if (!current()) return;
+                    if (user !== null && (!isRecord(user) || typeof user.uid !== 'string' || !user.uid)) { fail(); return; }
+                    const uid = user ? user.uid : null;
+                    if (uid === this.authUid) return;
+                    this.authUid = uid;
+                    // Invalidate private data and in-flight creation callbacks
+                    // before checking access for a different account.
+                    this.invalidateSession();
+                    this.error = '';
+                    if (uid === null) this.message = 'Sign in with the host account to manage this event.';
+                    else this.scheduleReconnect();
+                }, fail);
+                if (cancelled) release();
+            } catch (error) { fail(); }
         },
         clearPrivateState() {
             this.authenticated = false;
@@ -176,6 +234,7 @@ export default {
             });
         },
         async restore() {
+            if (this.authError || this.authUid === undefined) return;
             this.invalidateSession();
             const epoch = this.epoch;
             const client = this.hostClient;
@@ -186,10 +245,12 @@ export default {
             try {
                 const user = await client.restore();
                 if (!this.isCurrent(epoch, client, eventId)) return;
+                if ((user ? user.uid : null) !== this.authUid) return;
                 if (!user) {
                     this.message = 'Sign in with the host account to manage this event.';
                     return;
                 }
+                if (typeof user.uid !== 'string' || !user.uid) throw new Error('invalid-host-user');
                 this.authenticated = true;
                 await this.authorizeAndSubscribe(epoch, client, eventId);
             } catch (error) {
@@ -283,7 +344,7 @@ export default {
             }
         },
         async signIn() {
-            if (this.busy || !this.readyToSignIn) return;
+            if (this.busy || this.authError || this.authUid === undefined || !this.readyToSignIn) return;
             this.invalidateSession();
             const currentEpoch = this.epoch;
             const client = this.hostClient;
@@ -295,10 +356,10 @@ export default {
             this.error = '';
             this.message = 'Signing in…';
             try {
-                await client.signIn(email, password);
+                const user = await client.signIn(email, password);
                 if (!this.isCurrent(currentEpoch, client, eventId)) return;
-                this.authenticated = true;
-                await this.authorizeAndSubscribe(currentEpoch, client, eventId);
+                this.message = 'Checking signed-in host access…';
+                if (this.authUid && user && user.uid === this.authUid) await this.restore();
             } catch (error) {
                 if (this.isCurrent(currentEpoch, client, eventId)) {
                     this.clearPrivateState();
@@ -313,6 +374,7 @@ export default {
             const client = this.hostClient;
             this.pendingDeadlineMs = null;
             this.invalidateSession();
+            this.authUid = null;
             const epoch = this.epoch;
             this.password = '';
             this.error = '';
