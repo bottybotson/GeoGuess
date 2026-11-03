@@ -7,6 +7,9 @@ automatic_scaling:
   min_instances: 0
   max_instances: 1
 handlers:
+  - url: /api(/.*)?
+    script: auto
+    secure: always
   - url: /(.*\.(css|js|json|map|png|jpg|jpeg|gif|svg|ico|webp|avif|woff|woff2|ttf|eot|txt|xml|webmanifest))
     static_files: dist/\1
     upload: dist/.*\.(css|js|json|map|png|jpg|jpeg|gif|svg|ico|webp|avif|woff|woff2|ttf|eot|txt|xml|webmanifest)
