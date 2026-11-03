@@ -1,7 +1,8 @@
 {
-  "name": "geoguess-private-static-test",
+  "name": "geoguess-private-test-server",
   "version": "0.0.0",
   "private": true,
   "engines": { "node": "22.x" },
-  "scripts": { "start": "node server.cjs" }
+  "scripts": { "start": "node server.cjs", "test": "node --test *.test.cjs", "stage": "node stage.cjs", "test:emulator": "node run-emulator.cjs" },
+  "dependencies": { "firebase-admin": "13.6.0" }
 }
