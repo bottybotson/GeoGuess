@@ -1,5 +1,5 @@
 <template>
-    <main class="event-guest-lobby">
+    <main class="event-guest-lobby" :class="{ 'event-guest-lobby--playing': joinState === 'joined' && ['guessing', 'closed', 'reveal'].includes(phase) }">
         <header class="event-guest-lobby__header">
             <h1>{{ title }}</h1>
             <p class="event-guest-lobby__phase">{{ phaseMessage }}</p>
@@ -270,4 +270,11 @@ export default {
 .event-guest-lobby__phase, .event-guest-lobby__count { font-size: 1.125rem; }
 .event-guest-lobby__connection, .event-guest-lobby__retry { display: block; max-width: 34rem; margin: 1rem auto; }
 .event-guest-lobby__retry { min-height: 48px; padding: 0.5rem 1rem; font: inherit; }
+@media (max-width: 800px), (max-width: 1000px) and (max-height: 500px) {
+    .event-guest-lobby { padding: 0.5rem; min-height: 100dvh; box-sizing: border-box; }
+    .event-guest-lobby--playing .event-guest-lobby__header { max-width: 72rem; padding: 0; }
+    .event-guest-lobby--playing .event-guest-lobby__header h1 { margin: 0; font-size: 1.125rem; line-height: 1.3; }
+    .event-guest-lobby--playing .event-guest-lobby__phase,
+    .event-guest-lobby--playing .event-guest-lobby__count { display: none; }
+}
 </style>

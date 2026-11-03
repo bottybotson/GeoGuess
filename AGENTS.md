@@ -6,6 +6,7 @@
 - Read `docs/event-requirements.md`, `docs/current-state-gap-analysis.md`, `docs/implementation-roadmap.md`, and the relevant live GitHub issue before implementation. Issues #1–#9 are the persistent task/status tracker; use B01–B09 in branches and commits.
 - Retain Vue 2, Firebase Realtime Database, and Google Street View unless evidence justifies a change. Personal photos/stories are optional P2 work after core gameplay.
 - The host controls start, close, reveal, and next round, including extending time during play. Venue-first is optional; gentle introductory pacing is required.
+- Prioritize phone usability for players, especially older/inexperienced guests. The host/admin page must remain usable on phone and desktop; it need not be mobile-first. Preserve the approved presenter appearance.
 - Keep a read-only presentation view safe to project. Prefer separate admin and presentation pages; never expose admin credentials, private setup, or unrevealed answers there. Host/presenter must not consume guest slots.
 
 ## Orchestration and delivery
@@ -29,6 +30,6 @@
 
 ## Rehearsal access
 
-- Before public launch, the user requires access limited to their own testing devices. Hosting is currently disabled; do not republish an unrestricted site while this access policy is unresolved.
+- Before public launch, the user requires access limited to their own testing devices. Firebase Hosting is disabled. The private App Engine test site is active behind its native IP allowlist and default-deny policy; preserve that policy and never record device IP values in the repository. Do not publish an unrestricted site.
 - Firebase Hosting has no native IP allowlist. Never substitute the cloud agent/proxy IP for the user's device IP, or promise continuous visitor monitoring without a deployed enforcement mechanism.
 - Re-enable only under the user's agreed test-access policy. Preserve test data and reviewed artifacts while offline.

@@ -1,5 +1,5 @@
 <template>
-    <section>
+    <section class="event-guess-map-container" :class="{ 'event-guess-map-container--fill': fill }">
         <div class="event-guess-map-shell">
             <div ref="map" class="event-guess-map" role="application" :aria-label="hasAnswer ? 'Round result map: correct location and saved guess' : 'Choose your guess on the world map'"></div>
             <div v-if="status === 'loading'" class="map-message" role="status" aria-live="polite">
@@ -33,6 +33,9 @@ export default {
         disabled: { type: Boolean, default: false },
         selected: { type: Object, default: null },
         answer: { type: Object, default: null },
+        active: { type: Boolean, default: true },
+        fill: { type: Boolean, default: false },
+        gestureHandling: { type: String, default: 'auto' },
     },
     data() {
         return {
@@ -44,6 +47,8 @@ export default {
             mapsApi: null,
             status: 'loading',
             timeoutId: null,
+            resizeObserver: null,
+            resizeFrame: null,
         };
     },
     computed: {
@@ -54,15 +59,42 @@ export default {
         selected(value) { this.updateMarker(value); this.fitReveal(); },
         answer() { this.updateAnswer(); },
         mapsLoader() { this.createMap(); },
+        active(value) { if (value) this.queueResize(); },
+        fill() { this.queueResize(); },
+        gestureHandling(value) { if (this.map) this.map.setOptions({ gestureHandling: value }); },
     },
     mounted() {
         this.createMap();
+        window.addEventListener('resize', this.queueResize);
+        if (window.ResizeObserver) {
+            this.resizeObserver = new window.ResizeObserver(this.queueResize);
+            this.resizeObserver.observe(this.$refs.map);
+        }
     },
     beforeDestroy() {
         this.generation += 1;
+        window.removeEventListener('resize', this.queueResize);
+        if (this.resizeObserver) this.resizeObserver.disconnect();
         this.disposeMap();
     },
     methods: {
+        queueResize() {
+            const generation = this.generation;
+            this.$nextTick(() => {
+                if (generation !== this.generation || !this.active || !this.map) return;
+                if (this.resizeFrame !== null) window.cancelAnimationFrame(this.resizeFrame);
+                this.resizeFrame = window.requestAnimationFrame(() => {
+                    this.resizeFrame = null;
+                    if (generation !== this.generation || !this.active || !this.map) return;
+                    // Google needs a resize after a display:none panel becomes visible.
+                    // Keep the guest's viewport; toggling must never recenter their pin.
+                    const center = typeof this.map.getCenter === 'function' ? this.map.getCenter() : null;
+                    if (typeof this.mapsApi.event.trigger === 'function') this.mapsApi.event.trigger(this.map, 'resize');
+                    if (this.hasAnswer) this.fitReveal();
+                    else if (center && typeof this.map.setCenter === 'function') this.map.setCenter(center);
+                });
+            });
+        },
         async createMap() {
             const generation = ++this.generation;
             this.disposeMap();
@@ -86,12 +118,14 @@ export default {
                     streetViewControl: false,
                     clickableIcons: false,
                     fullscreenControl: false,
+                    gestureHandling: this.gestureHandling,
+                    ...(this.fill ? { controlSize: 48 } : {}),
                 });
                 this.map = map;
                 this.mapsApi = maps;
                 this.status = 'ready';
                 this.clickListener = maps.event.addListener(map, 'click', (event) => {
-                    if (this.disabled || this.hasAnswer || generation !== this.generation || !event || !event.latLng) return;
+                    if (!this.active || this.disabled || this.hasAnswer || generation !== this.generation || !event || !event.latLng) return;
                     const lat = typeof event.latLng.lat === 'function' ? event.latLng.lat() : NaN;
                     const lng = typeof event.latLng.lng === 'function' ? event.latLng.lng() : NaN;
                     const coords = { lat, lng };
@@ -101,6 +135,7 @@ export default {
                 });
                 this.updateMarker(this.selected, maps);
                 this.updateAnswer();
+                this.queueResize();
             } catch (error) {
                 if (generation === this.generation) {
                     this.disposeMap();
@@ -119,6 +154,8 @@ export default {
             this.createMap();
         },
         disposeMap() {
+            if (this.resizeFrame !== null) window.cancelAnimationFrame(this.resizeFrame);
+            this.resizeFrame = null;
             if (this.timeoutId) {
                 clearTimeout(this.timeoutId);
                 this.timeoutId = null;
@@ -190,6 +227,11 @@ export default {
 </script>
 
 <style scoped>
+.event-guess-map-container { min-width: 0; }
+.event-guess-map-container--fill { height: 100%; display: flex; flex-direction: column; }
+.event-guess-map-container--fill .event-guess-map-shell { flex: 1; height: auto; min-height: 0; }
+.event-guess-map-container--fill .event-guess-map { min-height: 0; }
+.event-guess-map-container--fill .event-guess-map-legend { flex: none; font-size: 0.875rem; }
 .event-guess-map-shell { position: relative; width: 100%; min-height: 18rem; height: 42vh; background: #eef2f5; }
 .event-guess-map { width: 100%; height: 100%; min-height: 18rem; }
 .map-message { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 1rem; text-align: center; background: rgba(238, 242, 245, 0.94); font-size: 1rem; }

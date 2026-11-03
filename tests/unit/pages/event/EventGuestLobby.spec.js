@@ -56,6 +56,24 @@ describe('EventGuestLobby', () => {
         expect(wrapper.find('[role="status"]').text()).toContain('Enter a nickname');
     });
 
+    it('compacts the player header only after joining an active round', async () => {
+        const wrapper = mountPage();
+        subscriptions[0].onChange({ phase: 'guessing', participants: [] });
+        await wrapper.vm.$nextTick();
+        expect(wrapper.classes('event-guest-lobby--playing')).toBe(false);
+        await finishProbe(wrapper, { status: 'rejoined' });
+        expect(wrapper.classes('event-guest-lobby--playing')).toBe(true);
+        for (const phase of ['closed', 'reveal']) {
+            subscriptions[0].onChange({ phase, participants: [] });
+            await wrapper.vm.$nextTick();
+            expect(wrapper.classes('event-guest-lobby--playing')).toBe(true);
+        }
+        subscriptions[0].onChange({ phase: 'lobby', participants: [] });
+        await wrapper.vm.$nextTick();
+        expect(wrapper.classes('event-guest-lobby--playing')).toBe(false);
+        wrapper.destroy();
+    });
+
     it('does not leak attributes supplied to the page component', () => {
         const wrapper = mount(EventGuestLobby, {
             propsData: { eventId: 'party', lobbyClient: client },
