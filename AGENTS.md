@@ -16,7 +16,7 @@
 - Give each agent explicit file ownership. Agents share the checkout: do not overlap edits or run Git mutations concurrently. The lead integrates, reviews, tests, commits, and publishes.
 - Use the existing isolated checkout; do not create worktrees unless the user asks. Preserve existing changes and use a feature branch.
 - Keep focused PRs linked to the relevant issue. Record progress, blockers, and decisions in GitHub. Close issues only after their acceptance criteria have evidence. If GitHub writes are blocked, preserve work on a branch, report the exact failure and direct issue links, and do not claim updates or PRs were created.
-- **Never merge into the default branch (`master` here; also applies if renamed `main`) without the user's explicit approval.** Development-branch staging is allowed. Do not deploy publicly or change live cloud access rules merely to make tests pass.
+- The user delegates code review and PR merging to the lead; they review and test the product. Merge focused PRs after appropriate validation and required independent reviews without asking for per-PR approval. Keep GitHub state and product-testing status current. Development-branch staging is also allowed. Do not deploy publicly or change live cloud access rules merely to make tests pass.
 - Require an independent review of synchronization, admission, scoring, and security changes before proposing them for merge. Report unresolved findings and unrun checks plainly.
 
 ## Development and validation
