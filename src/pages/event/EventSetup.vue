@@ -7,6 +7,12 @@
             using the panorama ID and camera orientation.
         </p>
 
+        <fieldset class="event-setup__mode">
+            <legend>Preparation mode</legend>
+            <label><input v-model="setupMode" type="radio" value="single"> One round (format 1)</label>
+            <label><input v-model="setupMode" type="radio" value="ordered"> Ordered rounds (format 2)</label>
+        </fieldset>
+
         <form class="event-setup__form" @submit.prevent>
             <fieldset>
                 <legend>Firebase project</legend>
@@ -27,7 +33,7 @@
                 <input id="event-setup-title" v-model="draft.title" maxlength="120">
             </fieldset>
 
-            <fieldset>
+            <fieldset v-if="setupMode === 'single'">
                 <legend>First round</legend>
                 <label for="event-setup-panorama">Panorama ID</label>
                 <input id="event-setup-panorama" v-model="draft.panoramaId" autocomplete="off" spellcheck="false">
@@ -44,7 +50,13 @@
             </fieldset>
         </form>
 
-        <section class="event-setup__preview" aria-labelledby="event-setup-preview-title">
+        <OrderedRoundsEditor
+            v-show="setupMode === 'ordered'"
+            :maps-loader="mapsLoader"
+            @change="orderedRows = $event"
+        />
+
+        <section v-if="setupMode === 'single'" class="event-setup__preview" aria-labelledby="event-setup-preview-title">
             <h2 id="event-setup-preview-title">Panorama preview</h2>
             <p v-if="!previewConfigurationValid" role="status">
                 Enter a valid panorama ID, heading, and pitch to preview the first round.
@@ -62,8 +74,10 @@
 
         <section class="event-setup__export" aria-labelledby="event-setup-export-title">
             <h2 id="event-setup-export-title">Seed JSON</h2>
-            <p v-if="!validSeed" role="status">Complete all fields with valid values to prepare the seed.</p>
-            <p v-else-if="!previewChoiceCurrent" role="status">Select “Use this panorama” after the preview is ready to enable export.</p>
+            <p v-if="!validSeed && setupMode === 'single'" role="status">Complete all fields with valid values to prepare the seed.</p>
+            <p v-else-if="!validSeed" role="status">Complete all fields with valid values and confirm every round preview to prepare the seed.</p>
+            <p v-else-if="setupMode === 'single' && !previewChoiceCurrent" role="status">Select “Use this panorama” after the preview is ready to enable export.</p>
+            <p v-if="setupMode === 'ordered'" role="status">This creates a local JSON seed only. It does not create a live game.</p>
             <p v-if="message" role="status">{{ message }}</p>
             <div class="event-setup__actions">
                 <button type="button" :disabled="!canExport" @click="copySeed">Copy JSON</button>
@@ -76,6 +90,8 @@
 
 <script>
 import EventPanoramaPreview from '@/components/event/EventPanoramaPreview.vue';
+import OrderedRoundsEditor from '@/components/event/OrderedRoundsEditor.vue';
+import { buildSeed } from '@/utils/event/orderedSetup';
 
 const blankDraft = () => ({
     projectId: '', databaseUrl: '', eventId: '', hostUid: '', title: '', panoramaId: '',
@@ -113,13 +129,15 @@ function validId(value) {
 
 export default {
     name: 'EventSetup',
-    components: { EventPanoramaPreview },
+    components: { EventPanoramaPreview, OrderedRoundsEditor },
     props: {
         mapsLoader: { type: Function, required: true },
     },
     data() {
         return {
             draft: blankDraft(),
+            setupMode: 'single',
+            orderedRows: [],
             previewChoice: null,
             previewRevision: 0,
             message: '',
@@ -141,7 +159,7 @@ export default {
         previewKey() {
             return JSON.stringify([this.draft.panoramaId, this.parsedHeading, this.parsedPitch]);
         },
-        validSeed() {
+        validSingleSeed() {
             const title = this.draft.title;
             return validTarget(this.draft) && validId(this.draft.hostUid) && title.length >= 1 && title.length <= 120 &&
                 title.trim() === title && !placeholder(title) && this.previewConfigurationValid &&
@@ -154,8 +172,18 @@ export default {
                 this.previewChoice.panoramaId === this.draft.panoramaId && this.previewChoice.heading === this.parsedHeading &&
                 this.previewChoice.pitch === this.parsedPitch;
         },
-        canExport() { return this.validSeed && Boolean(this.previewChoiceCurrent); },
+        validSeed() {
+            return this.setupMode === 'single' ? this.validSingleSeed : Boolean(this.orderedSeed);
+        },
+        orderedSeed() {
+            if (this.setupMode !== 'ordered' || !validTarget(this.draft) || !validId(this.draft.hostUid)) return null;
+            return buildSeed({ ...this.draft }, this.orderedRows);
+        },
+        canExport() {
+            return this.setupMode === 'single' ? this.validSingleSeed && Boolean(this.previewChoiceCurrent) : Boolean(this.orderedSeed);
+        },
         seed() {
+            if (this.setupMode === 'ordered') return this.canExport ? this.orderedSeed : null;
             if (!this.canExport) return null;
             return {
                 projectId: this.draft.projectId,
@@ -236,6 +264,8 @@ export default {
 
 <style scoped>
 .event-setup { max-width: 54rem; margin: 0 auto; padding: 1rem; }
+.event-setup__mode label { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0.5rem 1rem 0.5rem 0; }
+.event-setup__mode input { width: auto; min-height: auto; }
 .event-setup__form fieldset { display: grid; gap: 0.5rem; margin: 1rem 0; padding: 1rem; }
 .event-setup input { box-sizing: border-box; width: 100%; min-height: 2.75rem; padding: 0.5rem; font: inherit; }
 .event-setup__preview, .event-setup__export { margin-top: 2rem; }
