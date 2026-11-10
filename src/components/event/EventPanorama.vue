@@ -1,5 +1,5 @@
 <template>
-    <section class="event-panorama" aria-label="Street View panorama" aria-live="polite">
+    <section class="event-panorama" :class="{ 'event-panorama--fill': fill }" aria-label="Street View panorama" aria-live="polite">
         <div ref="panorama" class="event-panorama__view"></div>
         <div v-if="status !== 'ready'" class="event-panorama__message" role="status">
             <p>{{ message }}</p>
@@ -25,9 +25,11 @@ export default {
     props: {
         round: { type: Object, required: true },
         mapsLoader: { type: Function, required: true },
+        active: { type: Boolean, default: true },
+        fill: { type: Boolean, default: false },
     },
     data() {
-        return { status: 'loading', generation: 0, panorama: null, listeners: [], statusTimeout: null };
+        return { status: 'loading', generation: 0, panorama: null, listeners: [], statusTimeout: null, mapsApi: null, resizeObserver: null, resizeFrame: null };
     },
     computed: {
         message() {
@@ -45,16 +47,42 @@ export default {
         roundKey() {
             this.loadPanorama();
         },
+        mapsLoader() { this.loadPanorama(); },
+        active(value) { if (value) this.queueResize(); },
+        fill() { this.queueResize(); },
     },
     mounted() {
         this.loadPanorama();
+        window.addEventListener('resize', this.queueResize);
+        if (window.ResizeObserver) {
+            this.resizeObserver = new window.ResizeObserver(this.queueResize);
+            this.resizeObserver.observe(this.$refs.panorama);
+        }
     },
     beforeDestroy() {
         this.generation += 1;
+        window.removeEventListener('resize', this.queueResize);
+        if (this.resizeObserver) this.resizeObserver.disconnect();
         this.disposePanorama();
     },
     methods: {
+        queueResize() {
+            const generation = this.generation;
+            this.$nextTick(() => {
+                if (generation !== this.generation || !this.active || !this.panorama) return;
+                if (this.resizeFrame !== null) window.cancelAnimationFrame(this.resizeFrame);
+                this.resizeFrame = window.requestAnimationFrame(() => {
+                    this.resizeFrame = null;
+                    if (generation !== this.generation || !this.active || !this.panorama) return;
+                    // Do not reset pano/POV/zoom: guests may have walked away from the clue.
+                    if (typeof this.mapsApi.event.trigger === 'function') this.mapsApi.event.trigger(this.panorama, 'resize');
+                });
+            });
+        },
         disposePanorama() {
+            if (this.resizeFrame !== null) window.cancelAnimationFrame(this.resizeFrame);
+            this.resizeFrame = null;
+            this.mapsApi = null;
             clearTimeout(this.statusTimeout);
             this.statusTimeout = null;
             this.listeners.forEach((listener) => {
@@ -92,8 +120,11 @@ export default {
                     pov: { heading: round.heading, pitch: round.pitch },
                     visible: true,
                     addressControl: false,
+                    ...(this.fill ? { controlSize: 48 } : {}),
                 });
                 this.panorama = panorama;
+                this.mapsApi = maps;
+                this.queueResize();
                 const checkStatus = () => {
                     if (generation !== this.generation) return;
                     const ok = maps.StreetViewStatus ? maps.StreetViewStatus.OK : 'OK';
@@ -131,6 +162,7 @@ export default {
 <style scoped>
 .event-panorama { position: relative; min-height: 18rem; width: 100%; }
 .event-panorama__view { min-height: 18rem; width: 100%; }
+.event-panorama--fill, .event-panorama--fill .event-panorama__view { height: 100%; min-height: 0; }
 .event-panorama__message { position: absolute; inset: 0; display: grid; place-content: center; gap: 1rem; padding: 1rem; background: #f3f6f8; color: #17212b; text-align: center; font-size: 1.25rem; }
 .event-panorama__message p { margin: 0; }
 .event-panorama__message button { min-height: 3.5rem; padding: 0.5rem 1.25rem; font-size: 1.25rem; font-weight: 700; }

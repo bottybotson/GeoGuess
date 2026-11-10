@@ -153,4 +153,8 @@ export default {
 <style scoped>
 .event-guest-round { max-width: 72rem; margin: 1rem auto; }
 .event-guest-round > button { min-height: 48px; padding: 0.75rem 1rem; font: inherit; }
+@media (max-width: 800px), (max-width: 1000px) and (max-height: 500px) {
+    .event-guest-round { margin: 0.25rem auto 0; }
+    .event-guest-round .event-round-timer { margin-bottom: 0.25rem; font-size: 1rem; }
+}
 </style>
