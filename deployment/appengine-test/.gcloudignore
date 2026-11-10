@@ -1,6 +1,14 @@
 *
 !app.yaml
 !package.json
+!package-lock.json
 !server.cjs
+!policy.cjs
+!http.cjs
+!runtime.cjs
+!creation.cjs
+!store.cjs
+!validator.cjs
+!seed-core.cjs
 !dist/
 !dist/**
